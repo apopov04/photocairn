@@ -316,3 +316,6 @@ dialog .note { color: var(--muted); font-size: 12px; margin: 6px 0; }
 .md-foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
 .meta-link { margin: 0; }
 button.link { border: 0; background: none; color: var(--accent); font-weight: 600; padding: 4px; text-decoration: underline; text-underline-offset: 3px; }
+.panel .field { display: flex; flex-direction: column; gap: 6px; font-weight: 550; font-size: 13px; }
+.panel .num { display: inline-flex; align-items: center; gap: 4px; font-weight: 450; color: var(--muted); }
+.panel .num input[type="number"] { width: 72px; padding: 3px 6px; border-radius: 8px; color: var(--text); }

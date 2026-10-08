@@ -189,6 +189,7 @@ export function paintTool(A, kind, swap) {
     hardness: saved.hardness ?? (kind === "eraser" ? 80 : 70),
     opacity: saved.opacity ?? (kind === "highlighter" ? 70 : 100),
     block: !!saved.block,
+    color: saved.color || "#ffcc00", // highlighter keeps its own color, yellow by default
   };
   const save = () => localStorage.setItem(key, JSON.stringify(o));
   let hover = null, g = null;
@@ -199,7 +200,9 @@ export function paintTool(A, kind, swap) {
   const sizeS = slider({ label: "Size", min: 1, max: maxSize, value: o.size, format: (v) => `${v} px`, onInput: (v) => { o.size = v; save(); A.redraw(); } });
   const hardS = slider({ label: "Hardness", min: 0, max: 100, value: o.hardness, format: (v) => `${v}%`, onInput: (v) => { o.hardness = v; save(); } });
   const opS = slider({ label: "Opacity", min: 1, max: 100, value: o.opacity, format: (v) => `${v}%`, onInput: (v) => { o.opacity = v; save(); } });
-  const colors = kind === "eraser" ? null : colorRow(A);
+  const colors = kind === "eraser" ? null
+    : chisel ? Object.assign(swatches({ value: o.color, onChange: (v) => { o.color = v; save(); } }), { sync() {} })
+    : colorRow(A);
   const modeSeg = kind === "eraser" ? seg([{ value: "soft", label: "Brush" }, { value: "block", label: "Block" }], o.block ? "block" : "soft", (v) => { o.block = v === "block"; hardS.hidden = !hasHardness(); save(); }) : null;
   const typeSeg = swap ? seg(BRUSHES.map((b) => ({ value: b.value, label: b.label })), kind, swap) : null;
   hardS.hidden = !hasHardness();
@@ -233,7 +236,7 @@ export function paintTool(A, kind, swap) {
         base: d.canvas, at: p, raw: p,
         stroke: new Stroke(d.width, d.height, {
           size: o.size, hardness: hasHardness() ? o.hardness / 100 : 1, pixel: isPixel(), chisel,
-          color: kind === "eraser" ? "#000" : A.colors.fg,
+          color: kind === "eraser" ? "#000" : chisel ? o.color : A.colors.fg,
         }),
       };
       if (e?.shiftKey && lastStrokeEnd) g.stroke.to(lastStrokeEnd);
@@ -813,16 +816,22 @@ function moved(lifted, dx, dy) {
 
 const visiblePart = (A, ext) => layerFromExtent(ext, A.doc.width, A.doc.height).canvas;
 
-function commitExtent(A, ext) {
+function commitExtent(A, ext, meta = {}) {
   const { canvas, over } = layerFromExtent(ext, A.doc.width, A.doc.height);
-  A.doc.commit(canvas, {}, { over });
+  A.doc.commit(canvas, meta, { over });
+}
+
+/** Moving a whole text layer keeps it editable: its text box moves along. */
+function movedMeta(A, dx, dy) {
+  const t = A.doc.meta.text;
+  return t && !A.doc.selection ? { text: { ...t, x: t.x + dx, y: t.y + dy } } : {};
 }
 
 export function moveTool(A) {
   let drag = null;
   const nudge = (dx, dy) => {
     if (!guard(A, "position")) return;
-    commitExtent(A, moved(liftSelection(A), dx, dy));
+    commitExtent(A, moved(liftSelection(A), dx, dy), movedMeta(A, dx, dy));
     shiftSelection(A, dx, dy);
   };
   return {
@@ -846,7 +855,7 @@ export function moveTool(A) {
       if (!drag) return;
       const { lifted, dx, dy } = drag; drag = null;
       A.setSource(null);
-      if (dx || dy) { commitExtent(A, moved(lifted, dx, dy)); shiftSelection(A, dx, dy); }
+      if (dx || dy) { commitExtent(A, moved(lifted, dx, dy), movedMeta(A, dx, dy)); shiftSelection(A, dx, dy); }
     },
     keydown(e) {
       const k = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
@@ -867,7 +876,7 @@ function alignLayer(A) {
   const bx = b.x - lifted.ext.x, by = b.y - lifted.ext.y; // in document coordinates
   const dx = Math.round((A.doc.width - b.w) / 2 - bx), dy = Math.round((A.doc.height - b.h) / 2 - by);
   if (!dx && !dy) return;
-  commitExtent(A, moved(lifted, dx, dy));
+  commitExtent(A, moved(lifted, dx, dy), movedMeta(A, dx, dy));
   shiftSelection(A, dx, dy);
 }
 

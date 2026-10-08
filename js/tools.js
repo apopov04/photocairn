@@ -6,6 +6,8 @@ import * as ops from "./ops.js";
 import { makeCanvas, ctx2d, copyCanvas, getImageData, canvasFromImageData, resizeCanvas, makeLayer, BLEND_MODES } from "./editor.js";
 import { h, slider, seg, swatches, progress, nextFrame } from "./ui.js";
 import { guard, withinSelection } from "./paint.js";
+import { renderText, measureText, textBox, textLayerAt, layerName } from "./text.js";
+export { textLayerAt };
 
 const minSide = (d) => Math.min(d.width, d.height);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -696,128 +698,276 @@ export function redactTool(A) {
 /* Text                                                                        */
 /* -------------------------------------------------------------------------- */
 
-const FONTS = {
-  sans: 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif',
-  serif: 'Georgia, "Times New Roman", serif',
-  mono: 'ui-monospace, "SF Mono", Menlo, Consolas, monospace',
-  impact: 'Impact, "Arial Black", "Helvetica Neue", sans-serif',
-  hand: '"Comic Sans MS", "Chalkboard SE", "Marker Felt", cursive',
-};
+const TEXT_STYLE = { font: "sans", weight: 700, italic: false, align: "center", outline: true, bg: "transparent" };
 
-function layoutText(ctx, t) {
-  ctx.font = `${t.italic ? "italic " : ""}${t.weight} ${t.size}px ${FONTS[t.font]}`;
-  const lines = t.text.split("\n");
-  const lh = t.size * 1.2;
-  const widths = lines.map((l) => ctx.measureText(l).width);
-  const w = Math.max(1, ...widths), hgt = lines.length * lh;
-  return { lines, lh, widths, w, h: hgt };
-}
-
-function paintText(ctx, t) {
-  const L = layoutText(ctx, t);
-  const left = t.x - L.w / 2, top = t.y - L.h / 2;
-  if (t.box) {
-    const pad = t.size * 0.35;
-    ctx.fillStyle = t.boxColor;
-    ctx.beginPath();
-    ctx.roundRect(left - pad, top - pad * 0.6, L.w + pad * 2, L.h + pad * 1.2, pad * 0.8);
-    ctx.fill();
-  }
-  ctx.textBaseline = "middle";
-  ctx.textAlign = t.align;
-  // The block stays centered on (x, y); lines align within it.
-  const lx = t.align === "left" ? left : t.align === "right" ? left + L.w : t.x;
-  L.lines.forEach((line, i) => {
-    const y = top + L.lh * (i + 0.5);
-    if (t.outline) {
-      ctx.lineJoin = "round"; ctx.lineWidth = Math.max(2, t.size / 7);
-      ctx.strokeStyle = isLight(t.color) ? "#000" : "#fff";
-      ctx.strokeText(line, lx, y);
-    }
-    ctx.fillStyle = t.color;
-    ctx.fillText(line, lx, y);
-  });
-  return { x: left, y: top, w: L.w, h: L.h };
-}
-
-function isLight(hex) {
-  const n = parseInt(hex.slice(1), 16);
-  return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) > 150;
-}
-
+/**
+ * Text tool. Each text is its own layer whose parameters live in
+ * layer.meta.text (see text.js), so it stays editable: click it to edit,
+ * drag to move, drag the side handles to set the wrapping width. Edits are
+ * written to the layer live; one editing session is one undo step.
+ */
 export function textTool(A) {
-  const t = {
-    text: "Your text", font: "sans", weight: 700, italic: false, align: "center", color: A.colors.fg, outline: true, box: false, boxColor: A.colors.bg,
-    size: Math.round(minSide(A.doc) / 10), x: A.doc.width / 2, y: A.doc.height / 2,
-  };
-  let drag = null, placed = true;
-  const textColors = swatches({ value: t.color, onChange: (v) => { t.color = v; A.redraw(); } });
-  const area = h("textarea", { rows: 2, spellcheck: "true" }, t.text);
-  area.addEventListener("input", () => { t.text = area.value; A.redraw(); });
-  const btns = applyButtons(() => {
-    if (!t.text.trim()) return A.toast("Type some text first.");
-    // Each text goes on its own layer so it can be moved or removed later.
-    A.doc.change((d) => {
-      const c = makeCanvas(d.width, d.height);
-      paintText(c.getContext("2d"), t);
-      d.layers.splice(d.active + 1, 0, makeLayer(c, `Text: ${t.text.trim().split("\n")[0].slice(0, 24)}`));
-      d.active += 1;
+  const maxSize = Math.max(200, Math.round(minSide(A.doc) / 2));
+  const style = { ...TEXT_STYLE, color: A.colors.fg, ...JSON.parse(localStorage.getItem("pc-text") || "null"), size: Math.max(8, Math.round(minSide(A.doc) / 10)) };
+  // The text being edited: { id: layer id, t: params, ref: meta.text last written, recorded: undo step taken, created: layer made this session }
+  let cur = null, drag = null, hoverIdx = -1, pending = 0, self = false;
+  const params = () => (cur ? cur.t : style);
+  const indexOf = (id) => A.doc.layers.findIndex((l) => l.id === id);
+  const quiet = (fn) => { self = true; try { fn(); } finally { self = false; } };
+
+  /* ---- writing the text into its layer ---- */
+  function write() {
+    pending = 0;
+    if (!cur) return;
+    const d = A.doc, i = indexOf(cur.id);
+    if (i < 0) { cur = null; return syncUi(); }
+    const t = { ...cur.t }, l = d.layers[i];
+    quiet(() => {
+      if (!cur.recorded) { d.record(); cur.recorded = true; }
+      d.layers[i] = { ...l, ...renderText(t, d.width, d.height), meta: { text: t }, name: l.name.startsWith("Text") ? layerName(t.text) : l.name };
+      cur.ref = t;
+      d.emit();
     });
-    placed = false;
-    A.toast("Text added as a new layer. Tap the photo to place another.");
-  }, () => { t.x = A.doc.width / 2; t.y = A.doc.height / 2; placed = true; A.redraw(); }, "Add text");
-  setTimeout(() => { area.focus(); area.select(); }, 50);
-  const bounds = () => {
-    const x = document.createElement("canvas").getContext("2d");
-    const L = layoutText(x, t);
-    return { x: t.x - L.w / 2, y: t.y - L.h / 2, w: L.w, h: L.h };
-  };
+  }
+  const schedule = () => { if (!pending) pending = requestAnimationFrame(write); };
+  const flush = () => { if (pending) { cancelAnimationFrame(pending); write(); } };
+
+  /** Change the current text (or the style for the next one). */
+  function edit(fn) {
+    const t = params(), w0 = cur && !t.w ? measureText(t).w : 0;
+    fn(t);
+    for (const k of [...Object.keys(TEXT_STYLE), "color", "size"]) style[k] = t[k];
+    const { size, ...keep } = style;
+    localStorage.setItem("pc-text", JSON.stringify(keep));
+    if (!cur) return;
+    // Unwrapped text grows from its alignment side, like Photoshop's point text.
+    if (!t.w) { const dw = measureText(t).w - w0; t.x -= t.align === "center" ? dw / 2 : t.align === "right" ? dw : 0; }
+    schedule();
+  }
+
+  /* ---- editing sessions ---- */
+  function addText(p, w = 0, center = false, typing = false) {
+    done();
+    const d = A.doc;
+    const t = { ...style, text: area.value.trim() ? area.value : "Your text", w, x: p.x, y: p.y };
+    if (!w) {
+      const L = measureText(t);
+      t.x = p.x - (center || t.align === "center" ? L.w / 2 : t.align === "right" ? L.w : 0);
+      t.y = p.y - L.h / 2;
+    }
+    const r = renderText(t, d.width, d.height);
+    quiet(() => d.change((d) => {
+      d.layers.splice(d.active + 1, 0, makeLayer(r.canvas, layerName(t.text), { over: r.over, meta: { text: t } }));
+      d.active += 1;
+    }));
+    cur = { id: d.layer.id, t: { ...t }, ref: t, recorded: true, created: true };
+    syncUi(); A.redraw();
+    if (!typing) focusArea(true);
+  }
+
+  function editLayer(i, focus = false) {
+    const d = A.doc, l = d.layers[i];
+    if (cur?.id === l.id) { if (focus) focusArea(); return true; }
+    done();
+    if (d.active !== i) quiet(() => { d.active = i; d.emit(); });
+    if (!guard(A)) { syncUi(); return false; }
+    cur = { id: l.id, t: { ...l.meta.text }, ref: l.meta.text, recorded: false, created: false };
+    syncUi(); A.redraw();
+    if (focus) focusArea();
+    return true;
+  }
+
+  /** Pick up the active layer if it's an editable text layer (tool opened, undo, layer picked in the panel). */
+  function loadActive() {
+    if (pending) { cancelAnimationFrame(pending); pending = 0; }
+    const l = A.doc.layer, t = l.meta?.text, k = l.lock || {};
+    cur = t && l.visible && !k.all && !k.pixels ? { id: l.id, t: { ...t }, ref: t, recorded: false, created: false } : null;
+    syncUi(); A.redraw();
+  }
+
+  /** Finish editing. Text left empty removes its layer. */
+  function done() {
+    if (!cur) return;
+    flush();
+    const c = cur, d = A.doc, i = indexOf(c.id);
+    cur = null;
+    if (i >= 0 && !c.t.text.trim()) quiet(() => {
+      if (c.created) { d.undo(); d.redoStack.pop(); } // never mind: nothing was added
+      else if (d.layers.length > 1) d.change((d) => d.layers.splice(i, 1));
+    });
+    if (document.activeElement === area) area.blur();
+    syncUi(); A.redraw();
+  }
+
+  /* ---- panel ---- */
+  const area = h("textarea", { rows: 3, spellcheck: "true", placeholder: "Type here to add text" });
+  area.addEventListener("input", () => {
+    if (!cur) { if (area.value.trim()) addText({ x: A.doc.width / 2, y: A.doc.height / 2 }, 0, true, true); return; }
+    edit((t) => { t.text = area.value; });
+  });
+  area.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" || (e.key === "Enter" && (e.ctrlKey || e.metaKey))) { e.preventDefault(); done(); }
+  });
+  const focusArea = (select = false) => { area.focus({ preventScroll: true }); if (select) area.select(); };
+
+  const fontSeg = seg([
+    { value: "sans", label: "Sans" }, { value: "serif", label: "Serif" }, { value: "impact", label: "Bold" },
+    { value: "mono", label: "Mono" }, { value: "hand", label: "Casual" },
+  ], style.font, (v) => edit((t) => { t.font = v; }));
+  const weightSeg = seg([
+    { value: 300, label: "Light" }, { value: 400, label: "Regular" }, { value: 600, label: "Semibold" }, { value: 700, label: "Bold" }, { value: 900, label: "Black" },
+  ], style.weight, (v) => edit((t) => { t.weight = v; }));
+  const sizeRange = h("input", { type: "range", min: 8, max: maxSize, value: style.size, "aria-label": "Font size" });
+  const sizeIn = h("input", { type: "number", min: 4, max: 2000, step: 1, value: style.size, inputmode: "numeric", "aria-label": "Font size in pixels" });
+  const setSize = (v) => { v = clamp(Math.round(v), 4, 2000); sizeRange.value = v; edit((t) => { t.size = v; }); };
+  sizeRange.addEventListener("input", () => { sizeIn.value = sizeRange.value; setSize(+sizeRange.value); });
+  sizeIn.addEventListener("input", () => { if (+sizeIn.value >= 4) setSize(+sizeIn.value); });
+  const alignSeg = seg([{ value: "left", label: "Left" }, { value: "center", label: "Center" }, { value: "right", label: "Right" }], style.align, (v) => edit((t) => { t.align = v; }));
+  const colorSw = swatches({ value: style.color, onChange: (v) => edit((t) => { t.color = v; }) });
+  const bgSw = swatches({ value: style.bg, transparent: true, onChange: (v) => edit((t) => { t.bg = v; }) });
+  bgSw.querySelector(".swatch.transparent").title = "No background";
+  const italic = h("input", { type: "checkbox", checked: style.italic, onchange: (e) => edit((t) => { t.italic = e.target.checked; }) });
+  const outline = h("input", { type: "checkbox", checked: style.outline, onchange: (e) => edit((t) => { t.outline = e.target.checked; }) });
+  const hint = h("p", { class: "hint" });
+  const doneBtn = h("button", { class: "grow", onclick: () => done() }, "Done");
+
+  function syncUi() {
+    const t = params();
+    if (document.activeElement !== area || !cur) area.value = cur ? t.text : "";
+    fontSeg.set(t.font); weightSeg.set(t.weight); alignSeg.set(t.align);
+    sizeRange.value = t.size; if (document.activeElement !== sizeIn) sizeIn.value = t.size;
+    colorSw.set(t.color); bgSw.set(t.bg);
+    italic.checked = t.italic; outline.checked = t.outline;
+    doneBtn.disabled = !cur;
+    hint.textContent = cur
+      ? "Drag the text to move it, drag the side handles to set the box width. Esc or Done when finished."
+      : "Click the photo to add text, or drag to draw a text box. Click existing text to edit it.";
+  }
+
+  /* ---- canvas interaction ---- */
+  const tolOf = (e) => (e?.pointerType === "touch" ? 22 : 10) / A.view.zoom;
+  const inside = (b, p, tol) => p.x >= b.x - tol && p.x <= b.x + b.w + tol && p.y >= b.y - tol && p.y <= b.y + b.h + tol;
+  function hit(p, tol) {
+    if (!cur || indexOf(cur.id) < 0) return null;
+    const t = cur.t, L = measureText(t);
+    for (const side of [-1, 1]) {
+      const hx = side < 0 ? t.x : t.x + L.w;
+      if (Math.abs(p.x - hx) <= tol && p.y >= t.y - tol && p.y <= t.y + L.h + tol) return { type: "width", side, w0: L.w };
+    }
+    return inside(textBox(t, L), p, tol / 2) ? { type: "move" } : null;
+  }
+
+  loadActive();
   return {
     title: "Text",
     body: [
       area,
-      h("label", {}, "Font", seg([
-        { value: "sans", label: "Sans" }, { value: "serif", label: "Serif" }, { value: "impact", label: "Bold" },
-        { value: "mono", label: "Mono" }, { value: "hand", label: "Casual" },
-      ], t.font, (v) => { t.font = v; A.redraw(); })),
-      slider({ label: "Size", min: 8, max: Math.round(minSide(A.doc) / 2), value: t.size, onInput: (v) => { t.size = v; A.redraw(); } }),
-      h("label", {}, "Weight", seg([
-        { value: 300, label: "Light" }, { value: 400, label: "Regular" }, { value: 600, label: "Semibold" }, { value: 700, label: "Bold" }, { value: 900, label: "Black" },
-      ], t.weight, (v) => { t.weight = v; A.redraw(); })),
-      h("label", {}, "Align", seg([{ value: "left", label: "Left" }, { value: "center", label: "Center" }, { value: "right", label: "Right" }], t.align, (v) => { t.align = v; A.redraw(); })),
-      textColors,
+      h("div", { class: "field" }, "Font", fontSeg),
+      h("div", { class: "field" }, h("span", { class: "lab" }, "Font size", h("span", { class: "num" }, sizeIn, "px")), sizeRange),
+      h("div", { class: "field" }, "Weight", weightSeg),
+      h("div", { class: "field" }, "Align", alignSeg),
+      h("div", { class: "field" }, "Text color", colorSw),
+      h("div", { class: "field" }, "Background", bgSw),
       h("div", { class: "row" },
-        h("label", { class: "checkbox" }, h("input", { type: "checkbox", checked: t.italic, onchange: (e) => { t.italic = e.target.checked; A.redraw(); } }), "Italic"),
-        h("label", { class: "checkbox" }, h("input", { type: "checkbox", checked: t.outline, onchange: (e) => { t.outline = e.target.checked; A.redraw(); } }), "Outline"),
-        h("label", { class: "checkbox" }, h("input", { type: "checkbox", checked: t.box, onchange: (e) => { t.box = e.target.checked; A.redraw(); } }), "Background")),
-      h("p", { class: "hint" }, "Drag the text on the photo to move it."),
-      btns,
+        h("label", { class: "checkbox" }, italic, "Italic"),
+        h("label", { class: "checkbox" }, outline, "Outline")),
+      hint,
+      h("div", { class: "row" },
+        h("button", { class: "primary grow", onclick: () => addText({ x: A.doc.width / 2, y: A.doc.height / 2 }, 0, true) }, "Add text"),
+        doneBtn),
     ],
-    cursor: "crosshair",
+    cursorStyle: "text",
     wantsPointer: true,
-    down(p) {
-      const b = bounds(), pad = 10 / A.view.zoom;
-      if (placed && p.x > b.x - pad && p.x < b.x + b.w + pad && p.y > b.y - pad && p.y < b.y + b.h + pad) drag = { dx: t.x - p.x, dy: t.y - p.y };
-      else { t.x = p.x; t.y = p.y; placed = true; drag = { dx: 0, dy: 0 }; }
+    editAt(p) { const i = textLayerAt(A.doc, p, 6 / A.view.zoom); if (i >= 0) editLayer(i, true); },
+    editLayer: (i) => editLayer(i, true),
+    down(p, e) {
+      hoverIdx = -1;
+      const hh = hit(p, tolOf(e));
+      if (hh) { drag = { ...hh, start: p, t0: { ...cur.t }, moved: false }; return; }
+      const i = textLayerAt(A.doc, p, tolOf(e) / 2);
+      if (i >= 0) { if (editLayer(i)) drag = { type: "move", start: p, t0: { ...cur.t }, moved: false }; return; }
+      // Clicking away finishes the current text; the next click adds a new one.
+      if (cur) { done(); return; }
+      drag = { type: "new", start: p, end: p, moved: false };
+    },
+    move(p, e) {
+      if (!drag) return;
+      let dx = p.x - drag.start.x, dy = p.y - drag.start.y;
+      if (!drag.moved) {
+        if (Math.hypot(dx, dy) * A.view.zoom < 4) return;
+        if (drag.type === "move" && !guard(A, "position")) { drag = null; return; }
+        drag.moved = true;
+      }
+      if (drag.type === "new") { drag.end = p; return A.redraw(); }
+      const t = cur.t, t0 = drag.t0;
+      if (drag.type === "move") {
+        if (e?.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0; }
+        t.x = Math.round(t0.x + dx); t.y = Math.round(t0.y + dy);
+      } else {
+        const w = Math.round(Math.max(t.size, drag.w0 + dx * drag.side));
+        t.w = w;
+        if (drag.side < 0) t.x = Math.round(t0.x + drag.w0 - w);
+      }
+      schedule(); A.redraw();
+    },
+    up(p) {
+      const g = drag;
+      drag = null;
+      if (!g) return;
+      if (g.type === "new") {
+        if (!p) return; // a second finger started a pinch
+        const w = Math.abs(g.end.x - g.start.x);
+        if (g.moved && w * A.view.zoom > 16) addText({ x: Math.min(g.start.x, g.end.x), y: Math.min(g.start.y, g.end.y) }, Math.round(w));
+        else addText(g.start);
+      } else if (g.moved) flush();
+      else focusArea();
+    },
+    hover(p) {
+      hoverIdx = -1;
+      if (!p) return A.redraw();
+      const hh = hit(p, 10 / A.view.zoom);
+      if (!hh) hoverIdx = textLayerAt(A.doc, p, 5 / A.view.zoom);
+      A.setCursorStyle(hh?.type === "width" ? "ew-resize" : hh || hoverIdx >= 0 ? "move" : "text");
       A.redraw();
     },
-    move(p) { if (drag) { t.x = p.x + drag.dx; t.y = p.y + drag.dy; A.redraw(); } },
-    up() { drag = null; },
-    hover(p) {
-      if (!p) return;
-      const b = bounds();
-      A.setCursorStyle(placed && p.x > b.x && p.x < b.x + b.w && p.y > b.y && p.y < b.y + b.h ? "move" : "crosshair");
+    keydown(e) {
+      if (e.key === "Escape" && cur) { done(); return true; }
+      if (e.key === "Enter" && cur) { focusArea(); return true; }
+      if (e.key === "[" || e.key === "]") {
+        const s = params().size, step = Math.max(1, Math.round(s * 0.1));
+        setSize(clamp(s + (e.key === "]" ? step : -step), 4, 2000)); sizeIn.value = params().size;
+        return true;
+      }
+    },
+    onDocChange() {
+      if (self) return;
+      const l = A.doc.layer;
+      // Another change was recorded since: the next edit is a new undo step.
+      if (cur && l.id === cur.id && l.meta?.text === cur.ref) { cur.recorded = cur.created = false; syncUi(); }
+      else loadActive();
     },
     overlay(ctx, view) {
-      if (!placed || !t.text) return;
-      ctx.save();
-      ctx.translate(view.panX, view.panY); ctx.scale(view.zoom, view.zoom);
-      const b = paintText(ctx, t);
-      ctx.restore();
-      const a = view.toScreen(b.x, b.y);
-      ctx.setLineDash([5, 4]); ctx.strokeStyle = "rgba(58,109,240,.9)"; ctx.lineWidth = 1;
-      ctx.strokeRect(a.x - 6, a.y - 6, b.w * view.zoom + 12, b.h * view.zoom + 12);
+      const box = (b, dash, color) => {
+        const a = view.toScreen(b.x, b.y);
+        ctx.setLineDash(dash); ctx.strokeStyle = color; ctx.lineWidth = 1;
+        ctx.strokeRect(Math.round(a.x) + 0.5, Math.round(a.y) + 0.5, Math.round(b.w * view.zoom), Math.round(b.h * view.zoom));
+        return a;
+      };
+      if (drag?.type === "new" && drag.moved) {
+        const s = drag.start, e = drag.end;
+        box({ x: Math.min(s.x, e.x), y: Math.min(s.y, e.y), w: Math.abs(e.x - s.x), h: Math.abs(e.y - s.y) }, [5, 4], "rgba(58,109,240,.9)");
+      }
+      const hl = A.doc.layers[hoverIdx];
+      if (hl?.meta?.text && hl.id !== cur?.id) box(textBox(hl.meta.text), [3, 3], "rgba(58,109,240,.7)");
+      if (!cur || indexOf(cur.id) < 0) return;
+      const L = measureText(cur.t);
+      const a = box({ x: cur.t.x, y: cur.t.y, w: L.w, h: L.h }, [5, 4], "rgba(58,109,240,.95)");
+      ctx.setLineDash([]); ctx.fillStyle = "#fff"; ctx.strokeStyle = "#3a6df0"; ctx.lineWidth = 1.5;
+      for (const x of [a.x, a.x + L.w * view.zoom]) {
+        ctx.beginPath(); ctx.rect(Math.round(x) - 4.5, Math.round(a.y + (L.h * view.zoom) / 2) - 6.5, 9, 13); ctx.fill(); ctx.stroke();
+      }
     },
+    cleanup() { done(); A.setCursorStyle(""); },
   };
 }
 
@@ -1025,11 +1175,12 @@ export function layersPanel(A) {
       eye.onclick = (e) => { e.stopPropagation(); d.setLayerProps(i, { visible: !l.visible }); };
       const locked = l.lock && Object.values(l.lock).some(Boolean);
       const name = h("span", { class: "lname", title: "Double-click to rename" }, l.name);
-      const sub = h("span", { class: "lsub" }, [l.opacity < 1 ? `${Math.round(l.opacity * 100)}%` : "", l.blend !== "source-over" ? BLEND_MODES.find((b) => b[0] === l.blend)[1] : ""].filter(Boolean).join(" · "));
+      const sub = h("span", { class: "lsub" }, [l.meta?.text ? "Text" : "", l.opacity < 1 ? `${Math.round(l.opacity * 100)}%` : "", l.blend !== "source-over" ? BLEND_MODES.find((b) => b[0] === l.blend)[1] : ""].filter(Boolean).join(" · "));
       const li = h("li", {
         class: `${i === d.active ? "active" : ""} ${l.visible ? "" : "hidden-layer"}`, tabindex: 0,
         onclick: () => { if (d.active !== i) { d.active = i; d.emit(); } },
-        ondblclick: () => rename(i),
+        // Double-click a text layer to edit its text; double-click a name to rename.
+        ondblclick: (e) => (l.meta?.text && !e.target.closest(".lname") ? A.editText?.(i) : rename(i)),
         onkeydown: (e) => { if (e.key === "Enter") rename(i); },
       }, eye, thumb(l, d.width, d.height), h("span", { class: "linfo" }, name, sub), locked ? h("span", { class: "lock-ico", title: "Locked", html: LOCK_ICONS.all }) : null);
       list.append(li);
@@ -1074,7 +1225,7 @@ export function layerOps(A) {
     }),
     duplicate: () => A.doc.change((d) => {
       const l = d.layer;
-      d.layers.splice(d.active + 1, 0, makeLayer(copyCanvas(l.canvas), `${l.name} copy`, { opacity: l.opacity, blend: l.blend, visible: l.visible }));
+      d.layers.splice(d.active + 1, 0, makeLayer(copyCanvas(l.canvas), `${l.name} copy`, { opacity: l.opacity, blend: l.blend, visible: l.visible, over: l.over, meta: l.meta.text ? { text: l.meta.text } : {} }));
       d.active += 1;
     }),
     remove: () => {

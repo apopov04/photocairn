@@ -52,6 +52,8 @@ const A = {
   },
   setCursorStyle(css) { stageWrap.style.cursor = css || ""; },
   addImageLayer: (blob, name) => addImageLayer(blob, name),
+  /** Open text layer i for editing with the Text tool. */
+  editText(i) { selectTool("text"); tool.editLayer?.(i); },
   colors: { fg: localStorage.getItem("pc-fg") || "#000000", bg: localStorage.getItem("pc-bg") || "#ffffff" },
   setColor(which, hex) {
     A.colors[which] = hex;
@@ -205,6 +207,7 @@ function setDoc(d) {
 }
 
 function onDocChange() {
+  if (doc.rasterized) { doc.rasterized = false; toast("Text rasterized: it's now pixels and can no longer be edited as text."); }
   display();
   updateChrome();
   updateLayerNote();
@@ -504,6 +507,14 @@ stageWrap.addEventListener("pointerup", endPointer);
 stageWrap.addEventListener("pointercancel", endPointer);
 stageWrap.addEventListener("pointerleave", () => { if (!gesture) tool?.hover?.(null); });
 stageWrap.addEventListener("contextmenu", (e) => e.preventDefault());
+// Double-click text to edit it (with tools where a click doesn't paint).
+stageWrap.addEventListener("dblclick", (e) => {
+  if (!doc || !["move", "select", "transform", "eyedropper", "text"].includes(toolName)) return;
+  const p = localPoint(e), ip = view.toImage(p.x, p.y);
+  if (T.textLayerAt(doc, ip, 6 / view.zoom) < 0) return;
+  selectTool("text");
+  tool.editAt(ip);
+});
 
 stageWrap.addEventListener("wheel", (e) => {
   if (!doc) return;

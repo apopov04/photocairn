@@ -1,0 +1,80 @@
+tool:text
+eval:document.querySelector("#panel .hint").textContent
+tap:0.3:0.3
+wait:200
+eval:"placed: " + __photocairn.doc.layers.map(l=>l.name).join("|") + " focus=" + document.activeElement.tagName
+eval:JSON.stringify(__photocairn.doc.layer.meta.text)
+shot:x1-placed
+key:Escape
+eval:"after Esc focus=" + document.activeElement.tagName + " done disabled=" + [...document.querySelectorAll("#panel button")].find(b=>b.textContent==="Done").disabled
+drag:0.42:0.5:0.75:0.6
+wait:200
+eval:"box: layers=" + __photocairn.doc.layers.length + " w=" + __photocairn.doc.layer.meta.text.w
+eval:(()=>{const a=document.querySelector("#panel textarea");a.value="A caption that wraps inside its box";a.dispatchEvent(new Event("input"));return a.value})()
+wait:200
+eval:__photocairn.doc.layer.name + " / undo steps=" + __photocairn.doc.undoStack.length
+shot:x2-box-typed
+range:0:36
+wait:200
+eval:"font size=" + __photocairn.doc.layer.meta.text.size + " box w=" + __photocairn.doc.layer.meta.text.w
+eval:[...document.querySelectorAll("#panel .field")].find(f=>f.firstChild.textContent==="Background").querySelector('.swatch[data-v="#0a84ff"]').click() || "bg=" + __photocairn.doc.layer.meta.text.bg
+wait:200
+eval:"bg=" + __photocairn.doc.layer.meta.text.bg
+shot:x3-size-bg
+dragimg:(()=>{const t=__photocairn.doc.layer.meta.text;return [t.x+t.w,t.y+t.size*0.6,t.x+t.w+120,t.y+t.size*0.6]})()
+wait:200
+eval:"resized w=" + __photocairn.doc.layer.meta.text.w
+dragimg:(()=>{const t=__photocairn.doc.layer.meta.text;return [t.x+40,t.y+t.size*0.6,t.x-60,t.y-80+t.size*0.6]})()
+wait:200
+eval:"moved to " + Math.round(__photocairn.doc.layer.meta.text.x) + "," + Math.round(__photocairn.doc.layer.meta.text.y) + " undo steps=" + __photocairn.doc.undoStack.length
+shot:x4-resized-moved
+clicktext:Done
+eval:"done; editing=" + !![...document.querySelectorAll("#panel button")].find(b=>b.textContent==="Done").disabled
+click:#side .layers li:last-child
+tool:brush
+path:0.1:0.9:0.3:0.85:0.5:0.9
+eval:"painted bg; text layers=" + __photocairn.doc.layers.filter(l=>l.meta.text).length
+tool:text
+eval:"textarea empty=" + (document.querySelector("#panel textarea").value==="")
+dragimg:(()=>{const t=__photocairn.doc.layers[2].meta.text;return [t.x+20,t.y+t.size*0.6,t.x+20,t.y+t.size*0.6]})()
+wait:100
+eval:"re-opened: " + document.querySelector("#panel textarea").value + " active=" + __photocairn.doc.active
+eval:(()=>{const a=document.querySelector("#panel textarea");a.value="Edited after painting";a.dispatchEvent(new Event("input"));return a.value})()
+click:#panel .field:nth-child(7) .swatch[data-v="#ff3b30"]
+wait:200
+eval:"edited: " + JSON.stringify([__photocairn.doc.layers[2].meta.text.text, __photocairn.doc.layers[2].meta.text.color, __photocairn.doc.layers[2].name])
+shot:x5-reedited
+clicktext:Done
+key:Control+z
+wait:200
+eval:"after undo: " + JSON.stringify([__photocairn.doc.layers[2].meta.text.text, __photocairn.doc.layers[2].meta.text.color, __photocairn.doc.layers[2].name])
+key:Control+Shift+z
+wait:200
+eval:"after redo: " + __photocairn.doc.layers[2].meta.text.text
+key:Control+z
+wait:200
+dragimg:(()=>{const t=__photocairn.doc.layers[2].meta.text;return [t.x+20,t.y+t.size*0.6,t.x+20,t.y+t.size*0.6]})()
+wait:100
+eval:"re-opened after undo: " + document.querySelector("#panel textarea").value + " bg=" + __photocairn.doc.layers[2].meta.text.bg
+click:#panel .field:nth-child(8) .swatch[data-v="#ffffff"]
+wait:200
+eval:"bg now " + __photocairn.doc.layers[2].meta.text.bg + " redo=" + __photocairn.doc.canRedo
+shot:x6-after-undo-edit
+clicktext:Done
+tool:move
+dblclickimg:(()=>{const t=__photocairn.doc.layers[1].meta.text;return [t.x+20,t.y+t.size*0.6]})()
+wait:200
+eval:"dblclick: tool=" + document.querySelector("#panel h2").textContent + " text=" + document.querySelector("#panel textarea").value + " active=" + __photocairn.doc.active
+key:Escape
+tool:move
+eval:(()=>{const t=__photocairn.doc.layer.meta.text;return "before move x=" + Math.round(t.x)})()
+key:ArrowRight
+key:Shift+ArrowDown
+eval:(()=>{const t=__photocairn.doc.layer.meta.text;return "moved with Move tool, still text: x=" + Math.round(t.x) + " y=" + Math.round(t.y)})()
+tool:brush
+path:0.25:0.3:0.35:0.32
+wait:200
+eval:"after brush on text: meta.text=" + !!__photocairn.doc.layer.meta.text + " toast=" + document.querySelector("#toast").textContent
+shot:x7-rasterized
+key:Control+z
+eval:"undo restores text: " + !!__photocairn.doc.layer.meta.text

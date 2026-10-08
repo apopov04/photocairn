@@ -177,6 +177,7 @@ export class Doc {
    */
   commit(next, meta = {}, extra = {}) {
     this.record();
+    if (this.layer.meta?.text && !meta.text) this.rasterized = true; // the app tells the user
     let c = next;
     if (typeof next === "function") { c = copyCanvas(this.canvas); next(c); }
     this.layers[this.active] = { ...this.layer, canvas: c, meta, ...extra };
@@ -192,6 +193,7 @@ export class Doc {
   /** Transform every layer (crop, resize, rotate...). fn(canvas) returns a new canvas. */
   commitAll(fn) {
     this.record();
+    if (this.layers.some((l) => l.meta?.text)) this.rasterized = true;
     this.layers = this.layers.map((l, i) => ({ ...l, canvas: fn(l.canvas, i), meta: {}, over: null }));
     const w = this.layers[0].canvas.width, hgt = this.layers[0].canvas.height;
     if (w !== this.width || hgt !== this.height) this.selection = null;
