@@ -14,17 +14,100 @@ export function h(tag, attrs = {}, ...children) {
   return el;
 }
 
-/** Labeled range slider. onInput(value) fires live; onChange(value) on release. */
-export function slider({ label, min, max, value = 0, step = 1, format = (v) => v, onInput, onChange }) {
-  const out = h("output", {}, format(value));
-  const input = h("input", { type: "range", min, max, step, value });
-  input.addEventListener("input", () => { out.textContent = format(+input.value); onInput?.(+input.value); });
+/**
+ * Editable number field paired with a range input, like the Text tool's font size.
+ * Typing commits on Enter or blur (clamped to min/max, rounded to step) by setting the
+ * range and firing its "input" and "change" events, so the range's own listeners do the work.
+ * Arrow up/down nudge by one step (Shift: ten steps), Escape reverts. Returns a
+ * `<span class="num">` holding the field and the unit; call `.sync()` after setting
+ * `range.value` from code. Dragging the range keeps the field in sync on its own.
+ */
+export function numField(range, { unit = "", label } = {}) {
+  const num = (k, d) => (range.getAttribute(k) === null || range.getAttribute(k) === "" ? d : +range.getAttribute(k));
+  const min = num("min", 0), max = num("max", 100), step = num("step", 1);
+  const decimals = (String(step).split(".")[1] || "").length;
+  const field = h("input", {
+    type: "number", class: "numf", min, max, step, value: range.value,
+    // iOS's decimal keypad has no minus key, so fields that go negative get the default keyboard.
+    inputmode: min < 0 ? null : "decimal",
+    "aria-label": label ? `${label}${unit ? ` (${unit})` : ""}` : null,
+    enterkeyhint: "done", autocomplete: "off",
+  });
+  const fit = (v) => {
+    v = Math.min(max, Math.max(min, v));
+    v = min + Math.round((v - min) / step) * step;
+    return +Math.min(max, v).toFixed(decimals);
+  };
+  const sync = () => { field.value = String(+range.value); };
+  const commit = (v) => {
+    if (!Number.isFinite(v)) { sync(); return; }
+    v = fit(v);
+    field.value = String(v);
+    if (v === +range.value) return;
+    range.value = v;
+    range.dispatchEvent(new Event("input", { bubbles: true }));
+    range.dispatchEvent(new Event("change", { bubbles: true }));
+    sync(); // a listener may have refused or adjusted the value (e.g. a locked layer)
+  };
+  const typed = () => (field.value.trim() === "" ? NaN : +field.value);
+  field.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); commit(typed()); field.blur(); }
+    else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); sync(); field.blur(); }
+    else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      e.preventDefault();
+      const base = Number.isFinite(typed()) ? typed() : +range.value;
+      commit(base + (e.key === "ArrowUp" ? 1 : -1) * step * (e.shiftKey ? 10 : 1));
+    }
+  });
+  field.addEventListener("blur", () => commit(typed()));
+  field.addEventListener("focus", () => field.select());
+  // No live commits from the mouse wheel over a focused field: scrolling the panel shouldn't edit values.
+  field.addEventListener("wheel", () => field.blur(), { passive: true });
+  range.addEventListener("input", () => { if (document.activeElement !== field) sync(); });
+  const el = h("span", { class: "num" }, field, unit || null);
+  el.field = field;
+  el.sync = sync;
+  return el;
+}
+
+/** The unit a slider's format() appends to the number ("%", " px" → "px", "°"), "" for a bare
+ *  number, or null when the format isn't "number + suffix" (then the slider keeps a read-only output). */
+export function unitOf(format, min, max) {
+  let unit = null;
+  for (const v of [min, max, (min + max) / 2]) {
+    const s = String(format(v)), n = String(v);
+    if (!s.startsWith(n) || /^[\d.]/.test(s.slice(n.length))) return null;
+    const u = s.slice(n.length).trim();
+    if (unit !== null && u !== unit) return null;
+    unit = u;
+  }
+  return unit;
+}
+
+/** Labeled range slider with an editable number field. onInput(value) fires live; onChange(value)
+ *  on release or when a typed value is committed. `unit` defaults to whatever format() appends. */
+export function slider({ label, min, max, value = 0, step = 1, format = (v) => v, unit, onInput, onChange }) {
+  const input = h("input", { type: "range", min, max, step, value, "aria-label": label });
+  if (unit === undefined) unit = unitOf(format, +min, +max);
+  let out, sync;
+  if (unit === null) { // non-numeric label: read-only output as before
+    out = h("output", {}, format(value));
+    sync = () => { out.textContent = format(+input.value); };
+  } else {
+    out = numField(input, { unit, label });
+    sync = out.sync;
+  }
+  input.addEventListener("input", () => { if (unit === null) sync(); onInput?.(+input.value); });
   input.addEventListener("change", () => onChange?.(+input.value));
   // Double-click a slider to reset it.
   input.addEventListener("dblclick", () => { input.value = value; input.dispatchEvent(new Event("input")); input.dispatchEvent(new Event("change")); });
-  const el = h("label", {}, h("span", { class: "lab" }, label, out), input);
+  const lab = h("span", { class: "lab" }, label, out);
+  // Clicking the label text shouldn't jump into the number field (and pop a keyboard on phones).
+  lab.addEventListener("click", (e) => { if (e.target.tagName !== "INPUT") e.preventDefault(); });
+  const el = h("label", {}, lab, input);
   el.input = input;
-  el.set = (v) => { input.value = v; out.textContent = format(+v); };
+  el.field = out.field || null;
+  el.set = (v) => { input.value = v; sync(); };
   return el;
 }
 

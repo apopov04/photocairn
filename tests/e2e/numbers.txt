@@ -1,0 +1,66 @@
+tool:paint
+eval:[...document.querySelectorAll("#panel .lab")].map(l=>l.textContent.trim()+"="+(l.querySelector("input")?.value??"-")).join(" | ")
+type:#panel input.numf[aria-label^="Opacity"]:37
+key:Enter
+eval:"brush opacity " + JSON.parse(localStorage.getItem("pc-brush")).opacity + " range " + document.querySelectorAll("#panel input[type=range]")[2].value
+type:#panel input.numf[aria-label^="Size"]:99999
+key:Enter
+eval:"size clamped " + JSON.parse(localStorage.getItem("pc-brush")).size + " field " + document.querySelector('#panel input.numf[aria-label^="Size"]').value
+type:#panel input.numf[aria-label^="Size"]:150
+key:ArrowUp
+eval:"typed 150 + ArrowUp " + JSON.parse(localStorage.getItem("pc-brush")).size
+key:Shift+ArrowUp
+eval:"+ Shift+ArrowUp " + JSON.parse(localStorage.getItem("pc-brush")).size + " range " + document.querySelectorAll("#panel input[type=range]")[0].value
+key:Escape
+type:#panel input.numf[aria-label^="Opacity"]:50
+key:Shift+ArrowDown
+eval:"Shift+ArrowDown from typed 50 -> " + JSON.parse(localStorage.getItem("pc-brush")).opacity
+type:#panel input.numf[aria-label^="Opacity"]:12
+key:Escape
+eval:"after Escape opacity " + JSON.parse(localStorage.getItem("pc-brush")).opacity + " field " + document.querySelector('#panel input.numf[aria-label^="Opacity"]').value + " tool " + document.querySelector("#tools button.active")?.dataset.tool
+type:#panel input.numf[aria-label^="Opacity"]:v
+eval:"typed v: tool still " + document.querySelector("#tools button.active")?.dataset.tool + ", field " + JSON.stringify(document.activeElement.value)
+key:Escape
+range:2:64
+eval:"range step sync: field " + document.querySelector('#panel input.numf[aria-label^="Opacity"]').value
+shot:NUM1-brush
+tool:layers
+type:#side input.numf[aria-label^="Layer opacity"]:42
+key:Enter
+eval:"layer opacity " + __photocairn.doc.layer.opacity + " undo " + __photocairn.doc.undoStack.length
+key:Control+z
+eval:"after undo " + __photocairn.doc.layer.opacity + " field " + document.querySelector('#side input.numf[aria-label^="Layer opacity"]').value
+key:Control+y
+shot:NUM2-layer-opacity
+eval:__photocairn.doc.setLayerProps(__photocairn.doc.active, { lock: { all: true } }) || "locked"
+type:#side input.numf[aria-label^="Layer opacity"]:30
+key:Enter
+eval:"locked layer: opacity " + __photocairn.doc.layer.opacity + " field " + document.querySelector('#side input.numf[aria-label^="Layer opacity"]').value
+eval:__photocairn.doc.setLayerProps(__photocairn.doc.active, { lock: {} }) || "unlocked"
+tool:adjust
+eval:window.__px = (() => { const c = __photocairn.doc.layer.canvas, d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i]; return s / (d.length / 4); })()
+type:#panel input.numf[aria-label^="Brightness"]:-55.4
+eval:document.activeElement.blur() || "blurred"
+eval:"brightness field " + document.querySelector('#panel input.numf[aria-label^="Brightness"]').value + " range " + document.querySelectorAll("#panel input[type=range]")[0].value
+shot:NUM3-adjust
+clicktext:Apply
+wait:600
+eval:"mean red before " + window.__px.toFixed(1) + " after " + (() => { const c = __photocairn.doc.layer.canvas, d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i]; return (s / (d.length / 4)).toFixed(1); })()
+tool:rotate
+type:#panel input.numf[aria-label^="Angle"]:12.3
+key:Enter
+eval:"angle field " + document.querySelector('#panel input.numf[aria-label^="Angle"]').value
+shot:NUM4-rotate
+tool:crop
+eval:[...document.querySelectorAll("#panel .lab")].map(l=>l.textContent.trim()+"="+(l.querySelector("input")?.value??"-")).join(" | ")
+shot:NUM5-crop
+click:#btn-export
+wait:800
+clicktext:JPG
+type:#panel input.numf[aria-label^="Quality"]:42
+key:Enter
+type:#panel input.numf[aria-label^="Size"]:50
+key:Enter
+wait:1500
+eval:"export: quality range " + document.querySelector('#panel [name=quality]').value + ", meta " + document.querySelector("#export-meta").textContent
+shot:NUM6-export

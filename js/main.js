@@ -3,7 +3,7 @@
 
 import { Doc, View, makeCanvas, resizeCanvas, makeLayer } from "./editor.js";
 import { formatBytes, fitSize } from "./ops.js";
-import { h } from "./ui.js";
+import { h, numField } from "./ui.js";
 import * as T from "./tools.js";
 import * as P from "./paint.js";
 import * as PSD from "./psd.js";
@@ -698,14 +698,13 @@ function exportTool() {
   const nameIn = root.querySelector('[name="filename"]');
   nameIn.value = `${doc.name}-edited`;
   const q = root.querySelector('[name="quality"]'), sc = root.querySelector('[name="scale"]');
-  const qOut = q.parentElement.querySelector("output"), sOut = sc.parentElement.querySelector("output");
+  const qOut = numField(q, { unit: "%", label: "Quality" }), sOut = numField(sc, { unit: "%", label: "Size" });
+  q.parentElement.querySelector("output").replaceWith(qOut); sc.parentElement.querySelector("output").replaceWith(sOut);
   const syncUi = () => {
     for (const b of segEl.children) b.classList.toggle("on", b.dataset.v === o.format);
     const psd = o.format === "image/vnd.adobe.photoshop";
     qRow.hidden = o.format === "image/png" || psd;
     sc.parentElement.hidden = psd;
-    qOut.textContent = `${o.quality}%`;
-    sOut.textContent = `${o.scale}%`;
   };
   for (const b of segEl.children) {
     if (b.dataset.v === "image/webp" && !WEBP) { b.disabled = true; b.title = "This browser can't save WebP"; }
