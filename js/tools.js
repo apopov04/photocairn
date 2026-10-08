@@ -903,7 +903,7 @@ export function rotateTool(A) {
   const scopeSeg = seg([{ value: "image", label: "Whole image" }, { value: "layer", label: "Current layer" }], scope, (v) => { scope = v; angleSlider.set(0); angle = 0; A.setSource(null); });
   const scopeRow = h("label", {}, "Apply to", scopeSeg);
   const run = (fnImage, fnLayer) => {
-    if (layerOnly()) { if (guard(A, "position")) A.doc.commit(fnLayer(A.doc.canvas), {}); }
+    if (layerOnly()) { if (guard(A, "position")) A.doc.commit(fnLayer(A.doc.canvas), {}, { over: null }); }
     else { A.doc.commitAll(fnImage); A.view.fit(); }
   };
   const preview = () => {
@@ -929,7 +929,7 @@ export function rotateTool(A) {
       applyButtons(() => {
         if (!angle) return A.toast("Move the angle slider first.");
         const deg = angle; angle = 0; angleSlider.set(0); A.setSource(null);
-        if (layerOnly()) A.doc.commit(rotateFree(A.doc.canvas, deg, false), {});
+        if (layerOnly()) A.doc.commit(rotateFree(A.doc.canvas, deg, false), {}, { over: null });
         else {
           const W = A.doc.width, H = A.doc.height;
           A.doc.commitAll((c) => rotateFree(c, deg, true, W, H));
@@ -1082,7 +1082,7 @@ export function layerOps(A) {
       if (lockedAll()) return;
       A.doc.change((d) => { d.layers.splice(d.active, 1); d.active = Math.min(d.active, d.layers.length - 1); });
     },
-    clear: () => { if (guard(A)) A.doc.commit(makeCanvas(A.doc.width, A.doc.height), {}); },
+    clear: () => { if (guard(A)) A.doc.commit(makeCanvas(A.doc.width, A.doc.height), {}, { over: null }); },
     moveBy: (dir) => {
       const d = A.doc, j = d.active + dir;
       if (j < 0 || j >= d.layers.length) return;

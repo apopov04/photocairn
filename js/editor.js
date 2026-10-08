@@ -47,6 +47,36 @@ export function resizeCanvas(src, w, h) {
   return out;
 }
 
+/*
+ * Layers are stored at document size, but moving a layer partly off the
+ * canvas must not destroy what went over the edge. layer.over keeps the whole
+ * layer: { canvas, x, y, base }, where (x, y) is where the document's top-left
+ * sits inside over.canvas and base is the document-size canvas cut from it.
+ */
+
+/** The whole layer, including pixels outside the document: { canvas, x, y }. */
+export function layerExtent(layer, W, H) {
+  const o = layer.over;
+  if (!o) return { canvas: layer.canvas, x: 0, y: 0 };
+  if (o.base === layer.canvas) return { canvas: o.canvas, x: o.x, y: o.y };
+  // The visible part was edited since it was cut: keep those edits and what's off-canvas.
+  const left = Math.min(0, o.x), top = Math.min(0, o.y);
+  const right = Math.max(o.canvas.width, o.x + W), bottom = Math.max(o.canvas.height, o.y + H);
+  const c = makeCanvas(right - left, bottom - top), x = c.getContext("2d");
+  x.drawImage(o.canvas, -left, -top);
+  x.clearRect(o.x - left, o.y - top, W, H);
+  x.drawImage(layer.canvas, o.x - left, o.y - top);
+  return { canvas: c, x: o.x - left, y: o.y - top };
+}
+
+/** Layer props ({ canvas, over }) for a whole layer placed with the document's top-left at (ext.x, ext.y). */
+export function layerFromExtent(ext, W, H) {
+  const canvas = makeCanvas(W, H);
+  canvas.getContext("2d").drawImage(ext.canvas, -ext.x, -ext.y);
+  const hidden = ext.x > 0 || ext.y > 0 || ext.x + W < ext.canvas.width || ext.y + H < ext.canvas.height;
+  return { canvas, over: hidden ? { canvas: ext.canvas, x: ext.x, y: ext.y, base: canvas } : null };
+}
+
 const HISTORY_BUDGET = 400 * 1024 * 1024; // bytes of pixels kept for undo
 
 export const BLEND_MODES = [
@@ -141,12 +171,15 @@ export class Doc {
     this.trim();
   }
 
-  /** Replace the active layer's pixels (canvas, or fn that draws into a copy). */
-  commit(next, meta = {}) {
+  /**
+   * Replace the active layer's pixels (canvas, or fn that draws into a copy).
+   * `extra` overrides other layer props, e.g. { over: null } to drop off-canvas pixels.
+   */
+  commit(next, meta = {}, extra = {}) {
     this.record();
     let c = next;
     if (typeof next === "function") { c = copyCanvas(this.canvas); next(c); }
-    this.layers[this.active] = { ...this.layer, canvas: c, meta };
+    this.layers[this.active] = { ...this.layer, canvas: c, meta, ...extra };
     this.emit();
   }
 
@@ -159,7 +192,7 @@ export class Doc {
   /** Transform every layer (crop, resize, rotate...). fn(canvas) returns a new canvas. */
   commitAll(fn) {
     this.record();
-    this.layers = this.layers.map((l, i) => ({ ...l, canvas: fn(l.canvas, i), meta: {} }));
+    this.layers = this.layers.map((l, i) => ({ ...l, canvas: fn(l.canvas, i), meta: {}, over: null }));
     const w = this.layers[0].canvas.width, hgt = this.layers[0].canvas.height;
     if (w !== this.width || hgt !== this.height) this.selection = null;
     this.width = w; this.height = hgt;
@@ -189,6 +222,7 @@ export class Doc {
         if (seen.has(l.canvas)) continue;
         seen.add(l.canvas);
         bytes += l.canvas.width * l.canvas.height * 4;
+        if (l.over && !seen.has(l.over.canvas)) { seen.add(l.over.canvas); bytes += l.over.canvas.width * l.over.canvas.height * 4; }
       }
       if (bytes > HISTORY_BUDGET && i < this.undoStack.length - 2) {
         this.undoStack.splice(0, i + 1);

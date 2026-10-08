@@ -5,7 +5,7 @@
 // the current selection and the layer's "lock transparent pixels" setting.
 
 import * as ops from "./ops.js";
-import { makeCanvas, copyCanvas, getImageData } from "./editor.js";
+import { makeCanvas, copyCanvas, getImageData, layerExtent, layerFromExtent } from "./editor.js";
 import { h, slider, seg, swatches } from "./ui.js";
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -617,15 +617,20 @@ export function selectTool(A, makeLayer) {
 
 /* ----------------------------------- move ----------------------------------- */
 
-/** Split the active layer into the selected piece and the rest. */
+/**
+ * Split the active layer into the selected piece and the rest. Works on the
+ * whole layer, including pixels moved off the canvas earlier, so they come
+ * back intact. piece/rest are in the coordinates of ext.canvas.
+ */
 function liftSelection(A) {
-  const d = A.doc, sel = d.selection;
-  if (!sel) return { piece: d.canvas, rest: null };
-  const piece = copyCanvas(d.canvas), px = piece.getContext("2d");
-  px.globalCompositeOperation = "destination-in"; px.drawImage(sel.mask, 0, 0);
-  const rest = copyCanvas(d.canvas), rx = rest.getContext("2d");
-  rx.globalCompositeOperation = "destination-out"; rx.drawImage(sel.mask, 0, 0);
-  return { piece, rest };
+  const d = A.doc, sel = d.selection, ext = layerExtent(d.layer, d.width, d.height);
+  if (!sel) return { ext, piece: ext.canvas, rest: null };
+  const piece = makeCanvas(ext.canvas.width, ext.canvas.height), px = piece.getContext("2d");
+  px.drawImage(sel.mask, ext.x, ext.y);
+  px.globalCompositeOperation = "source-in"; px.drawImage(ext.canvas, 0, 0);
+  const rest = copyCanvas(ext.canvas), rx = rest.getContext("2d");
+  rx.globalCompositeOperation = "destination-out"; rx.drawImage(sel.mask, ext.x, ext.y);
+  return { ext, piece, rest };
 }
 
 function shiftSelection(A, dx, dy) {
@@ -637,18 +642,29 @@ function shiftSelection(A, dx, dy) {
   A.selectionChanged();
 }
 
-function moved(A, lifted, dx, dy) {
-  const d = A.doc, out = lifted.rest ? copyCanvas(lifted.rest) : makeCanvas(d.width, d.height);
-  out.getContext("2d").drawImage(lifted.piece, dx, dy);
-  return out;
+/** The whole layer after moving the lifted piece by (dx, dy). */
+function moved(lifted, dx, dy) {
+  const { ext, piece, rest } = lifted;
+  if (!rest) return { canvas: piece, x: ext.x - dx, y: ext.y - dy };
+  const left = Math.max(0, -dx), top = Math.max(0, -dy);
+  const out = makeCanvas(piece.width + Math.abs(dx), piece.height + Math.abs(dy)), x = out.getContext("2d");
+  x.drawImage(rest, left, top);
+  x.drawImage(piece, left + dx, top + dy);
+  return { canvas: out, x: ext.x + left, y: ext.y + top };
+}
+
+const visiblePart = (A, ext) => layerFromExtent(ext, A.doc.width, A.doc.height).canvas;
+
+function commitExtent(A, ext) {
+  const { canvas, over } = layerFromExtent(ext, A.doc.width, A.doc.height);
+  A.doc.commit(canvas, {}, { over });
 }
 
 export function moveTool(A) {
   let drag = null;
   const nudge = (dx, dy) => {
     if (!guard(A, "position")) return;
-    const lifted = liftSelection(A);
-    A.doc.commit(moved(A, lifted, dx, dy), {});
+    commitExtent(A, moved(liftSelection(A), dx, dy));
     shiftSelection(A, dx, dy);
   };
   return {
@@ -666,13 +682,13 @@ export function moveTool(A) {
       let dx = Math.round(p.x - drag.start.x), dy = Math.round(p.y - drag.start.y);
       if (e?.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0; }
       drag.dx = dx; drag.dy = dy;
-      A.setSource(moved(A, drag.lifted, dx, dy));
+      A.setSource(visiblePart(A, moved(drag.lifted, dx, dy)));
     },
     up() {
       if (!drag) return;
       const { lifted, dx, dy } = drag; drag = null;
       A.setSource(null);
-      if (dx || dy) { A.doc.commit(moved(A, lifted, dx, dy), {}); shiftSelection(A, dx, dy); }
+      if (dx || dy) { commitExtent(A, moved(lifted, dx, dy)); shiftSelection(A, dx, dy); }
     },
     keydown(e) {
       const k = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
@@ -690,9 +706,10 @@ function alignLayer(A) {
   const lifted = liftSelection(A);
   const b = ops.alphaBounds(getImageData(lifted.piece));
   if (!b) return A.toast("This layer is empty.");
-  const dx = Math.round((A.doc.width - b.w) / 2 - b.x), dy = Math.round((A.doc.height - b.h) / 2 - b.y);
+  const bx = b.x - lifted.ext.x, by = b.y - lifted.ext.y; // in document coordinates
+  const dx = Math.round((A.doc.width - b.w) / 2 - bx), dy = Math.round((A.doc.height - b.h) / 2 - by);
   if (!dx && !dy) return;
-  A.doc.commit(moved(A, lifted, dx, dy), {});
+  commitExtent(A, moved(lifted, dx, dy));
   shiftSelection(A, dx, dy);
 }
 
@@ -716,17 +733,31 @@ export function transformTool(A) {
     if (!b) { status.textContent = "Nothing to transform on this layer."; return; }
     const src = makeCanvas(b.w, b.h);
     src.getContext("2d").drawImage(lifted.piece, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);
-    st = { src, rest: lifted.rest, w0: b.w, h0: b.h, cx: b.x + b.w / 2, cy: b.y + b.h / 2, w: b.w, h: b.h, angle: 0, fx: 1, fy: 1, hadSelection: !!d.selection };
+    const ext = lifted.ext;
+    st = { src, rest: lifted.rest, ext, w0: b.w, h0: b.h, cx: b.x - ext.x + b.w / 2, cy: b.y - ext.y + b.h / 2, w: b.w, h: b.h, angle: 0, fx: 1, fy: 1, hadSelection: !!d.selection };
     status.textContent = "Drag a corner to scale, outside a corner to rotate, inside to move. Enter applies, Esc cancels.";
     sync();
   }
 
-  const render = () => {
-    const d = A.doc, out = st.rest ? copyCanvas(st.rest) : makeCanvas(d.width, d.height), x = out.getContext("2d");
+  // Draws the rest of the layer plus the transformed piece, with the document's top-left at (ox, oy).
+  const drawInto = (out, ox, oy) => {
+    const x = out.getContext("2d");
+    if (st.rest) x.drawImage(st.rest, ox - st.ext.x, oy - st.ext.y);
     x.imageSmoothingQuality = "high";
-    x.translate(st.cx, st.cy); x.rotate(st.angle); x.scale(st.fx * (st.w / st.w0), st.fy * (st.h / st.h0));
+    x.translate(ox + st.cx, oy + st.cy); x.rotate(st.angle); x.scale(st.fx * (st.w / st.w0), st.fy * (st.h / st.h0));
     x.drawImage(st.src, -st.w0 / 2, -st.h0 / 2);
     return out;
+  };
+  // Preview: just the document area.
+  const render = () => drawInto(makeCanvas(A.doc.width, A.doc.height), 0, 0);
+  // Result: the whole layer, so nothing transformed past the edge is lost.
+  const renderWhole = () => {
+    const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => toWorld({ x: (sx * st.w) / 2, y: (sy * st.h) / 2 }));
+    let l = Math.min(...pts.map((p) => p.x)), t = Math.min(...pts.map((p) => p.y));
+    let r = Math.max(...pts.map((p) => p.x)), btm = Math.max(...pts.map((p) => p.y));
+    if (st.rest) { l = Math.min(l, -st.ext.x); t = Math.min(t, -st.ext.y); r = Math.max(r, st.rest.width - st.ext.x); btm = Math.max(btm, st.rest.height - st.ext.y); }
+    l = Math.floor(l) - 1; t = Math.floor(t) - 1; r = Math.ceil(r) + 1; btm = Math.ceil(btm) + 1;
+    return { canvas: drawInto(makeCanvas(r - l, btm - t), -l, -t), x: -l, y: -t };
   };
   const throttled = frameThrottle(() => { if (st) A.setSource(render()); });
   function sync() {
@@ -741,9 +772,9 @@ export function transformTool(A) {
 
   const apply = () => {
     if (!st) return;
-    const out = render(), hadSel = st.hadSelection;
+    const whole = renderWhole(), hadSel = st.hadSelection;
     st = null; A.setSource(null);
-    A.doc.commit(out, {});
+    commitExtent(A, whole);
     if (hadSel) deselect(A);
     start();
   };
