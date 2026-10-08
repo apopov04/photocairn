@@ -128,25 +128,30 @@ function makeStamp(size, hardness, color, chisel = false) {
   return c;
 }
 
+/** Aliased, pixel-sharp tip: round for the pencil, square for the Block eraser. */
+function makePixelStamp(size, color, square) {
+  const s = Math.max(1, Math.round(size)), c = makeCanvas(s, s), x = c.getContext("2d");
+  x.fillStyle = color;
+  if (square) x.fillRect(0, 0, s, s);
+  else ops.circleSpans(s).forEach(([a, b], y) => x.fillRect(a, y, b - a, 1));
+  return c;
+}
+
 /** Accumulates one stroke into its own canvas (so opacity applies once per stroke). */
 class Stroke {
+  // pixel: false, "round" (pencil) or "square" (Block eraser).
   constructor(w, hgt, { size, hardness = 1, color = "#000", pixel = false, chisel = false }) {
     this.canvas = makeCanvas(w, hgt);
     this.x = this.canvas.getContext("2d");
-    this.size = size; this.pixel = pixel; this.last = null;
-    this.color = color;
-    if (!pixel) this.stamp = makeStamp(size, hardness, color, chisel);
-    this.spacing = pixel ? 1 : Math.max(0.5, size * 0.1);
+    this.pixel = !!pixel; this.last = null;
+    this.stamp = pixel ? makePixelStamp(size, color, pixel === "square") : makeStamp(size, hardness, color, chisel);
+    // Round tips can step ~sqrt(size)/2 apart: the scallops between dabs stay under 1/16 px.
+    this.spacing = pixel === "round" ? Math.max(1, Math.sqrt(size) / 2) : pixel ? 1 : Math.max(0.5, size * 0.1);
   }
   dab(p) {
-    if (this.pixel) {
-      const s = Math.max(1, Math.round(this.size));
-      this.x.fillStyle = this.color;
-      this.x.fillRect(Math.round(p.x - s / 2), Math.round(p.y - s / 2), s, s);
-    } else {
-      const d = this.stamp.width / 2;
-      this.x.drawImage(this.stamp, p.x - d, p.y - d);
-    }
+    const d = this.stamp.width / 2;
+    if (this.pixel) this.x.drawImage(this.stamp, Math.round(p.x - d), Math.round(p.y - d));
+    else this.x.drawImage(this.stamp, p.x - d, p.y - d);
   }
   to(p) {
     if (!this.last) { this.dab(p); this.last = p; return; }
@@ -193,7 +198,7 @@ export function paintTool(A, kind, swap) {
   };
   const save = () => localStorage.setItem(key, JSON.stringify(o));
   let hover = null, g = null;
-  const isPixel = () => kind === "pencil" || (kind === "eraser" && o.block);
+  const isPixel = () => kind === "pencil" ? "round" : kind === "eraser" && o.block ? "square" : false;
   const hasHardness = () => kind === "brush" || (kind === "eraser" && !o.block);
   const chisel = kind === "highlighter", smooth = kind === "pen";
   const maxSize = Math.max(200, Math.round(m / 3));
@@ -272,7 +277,7 @@ export function paintTool(A, kind, swap) {
     },
     overlay(ctx, view) {
       const r = Math.max(0.5, o.size / 2);
-      brushCursor(ctx, view, hover, chisel ? r * CHISEL : r, isPixel() || chisel, r);
+      brushCursor(ctx, view, hover, chisel ? r * CHISEL : r, isPixel() === "square" || chisel, r);
     },
     cleanup() { A.setSource(null); },
   };

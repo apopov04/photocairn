@@ -283,6 +283,22 @@ export function fitSize(w, h, maxW, maxH) {
   return { width: Math.max(1, Math.round(w * s)), height: Math.max(1, Math.round(h * s)) };
 }
 
+/**
+ * Aliased round tip of diameter d (pixel-art style, like Photoshop's pencil):
+ * one [start, end) column span per row. A pixel is in if its centre lies
+ * within the circle; the radius is trimmed a hair so 3 px is a plus, not a block.
+ */
+export function circleSpans(d) {
+  d = Math.max(1, Math.round(d));
+  const c = d / 2, r2 = (c - 0.1) ** 2, spans = [];
+  for (let y = 0; y < d; y++) {
+    const dy = y + 0.5 - c, half = Math.sqrt(Math.max(0, r2 - dy * dy));
+    const a = Math.max(0, Math.ceil(c - half - 0.5));
+    spans.push([a, d - a]);
+  }
+  return spans;
+}
+
 /** Human-readable byte size. */
 export function formatBytes(n) {
   if (n < 1024) return `${n} B`;

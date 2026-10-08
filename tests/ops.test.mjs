@@ -166,3 +166,24 @@ test("maskOutline traces a square, a hole and separate pieces", () => {
   const rgba = new Uint8Array(4 * 4); rgba[3] = 255;
   assert.deepEqual(ops.maskOutline(rgba, 2, 2, 4, 3), [[0, 0, 1, 0, 1, 1, 0, 1]]);
 });
+
+test("circleSpans: aliased round pencil tip", () => {
+  assert.deepEqual(ops.circleSpans(1), [[0, 1]]); // a single pixel
+  assert.deepEqual(ops.circleSpans(2), [[0, 2], [0, 2]]);
+  assert.deepEqual(ops.circleSpans(3), [[1, 2], [0, 3], [1, 2]]); // a plus
+  for (const d of [4, 5, 8, 13, 60, 301]) {
+    const s = ops.circleSpans(d);
+    assert.equal(s.length, d);
+    s.forEach(([a, b], y) => {
+      assert.equal(b, d - a, "left/right symmetric");
+      assert.deepEqual(s[d - 1 - y], [a, b], "top/bottom symmetric");
+      assert.ok(a >= 0 && a < b);
+    });
+    const mid = s[Math.floor(d / 2)], area = s.reduce((n, [a, b]) => n + b - a, 0);
+    assert.deepEqual(mid, [0, d], "full width through the middle");
+    assert.ok(s[0][0] > 0, "corners are cut");
+    // transpose symmetric (round, not oval): column x's height equals row x's width
+    s.forEach(([a, b], x) => assert.equal(s.filter(([a2, b2]) => x >= a2 && x < b2).length, b - a));
+    assert.ok(Math.abs(area / (Math.PI * d * d / 4) - 1) < (d < 10 ? 0.25 : 0.05), `area ~ pi r^2 for ${d}`);
+  }
+});

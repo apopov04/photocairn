@@ -1,0 +1,33 @@
+tool:pencil
+range:0:60
+click:#panel .swatch[data-v="#ff3b30"]
+eval:(() => { const c = __photocairn.doc.canvas; window.__before = c.getContext("2d").getImageData(0, 0, c.width, c.height).data; return c.width + "x" + c.height; })()
+drag:0.2:0.5:0.6:0.85
+tap:0.8:0.2
+shot:N1-pencil
+eval:(() => { const c = __photocairn.doc.canvas, d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data, b = window.__before; let changed = 0, red = 0; for (let i = 0; i < d.length; i += 4) if (d[i] !== b[i] || d[i + 1] !== b[i + 1] || d[i + 2] !== b[i + 2] || d[i + 3] !== b[i + 3]) { changed++; if (d[i] === 255 && d[i + 1] === 59 && d[i + 2] === 48 && d[i + 3] === 255) red++; } return "changed " + changed + ", exactly fg " + red + ", partial " + (changed - red); })()
+eval:(async () => { const ops = await import("/js/ops.js"); const c = __photocairn.doc.canvas, W = c.width, H = c.height, d = c.getContext("2d").getImageData(0, 0, W, H).data, b = window.__before; const rows = new Map(); for (let y = 0; y < H * 0.45; y++) for (let x = Math.floor(W * 0.65); x < W; x++) { const i = (y * W + x) * 4; if (d[i] !== b[i] || d[i + 1] !== b[i + 1] || d[i + 2] !== b[i + 2]) { const r = rows.get(y) || [1e9, -1]; r[0] = Math.min(r[0], x); r[1] = Math.max(r[1], x + 1); rows.set(y, r); } } const ys = [...rows.keys()].sort((a, b) => a - b), x0 = Math.min(...[...rows.values()].map((r) => r[0])); const got = ys.map((y) => [rows.get(y)[0] - x0, rows.get(y)[1] - x0]); window.__tap = { x: x0, y: ys[0] }; return "tap rows " + got.length + ", matches circleSpans(60): " + (JSON.stringify(got) === JSON.stringify(ops.circleSpans(60))) + ", first rows " + JSON.stringify(got.slice(0, 4)); })()
+eval:(() => { const c = __photocairn.doc.canvas, t = window.__tap, z = document.createElement("canvas"); z.width = z.height = 70; z.getContext("2d").drawImage(c, t.x - 5, t.y - 5, 70, 70, 0, 0, 70, 70); z.style.cssText = "position:fixed;left:0;top:0;width:700px;height:700px;image-rendering:pixelated;z-index:99999;border:2px solid #0f0"; z.id = "zoomck"; document.body.append(z); return "ok"; })()
+shot:N2-tap-zoom
+eval:(() => { document.getElementById("zoomck").remove(); const c = __photocairn.doc.canvas, t = window.__tap, z = document.createElement("canvas"); const cx = Math.round(c.width * 0.4), cy = Math.round(c.height * 0.67); z.width = z.height = 120; z.getContext("2d").drawImage(c, cx - 60, cy - 60, 120, 120, 0, 0, 120, 120); z.style.cssText = "position:fixed;left:0;top:0;width:720px;height:720px;image-rendering:pixelated;z-index:99999;border:2px solid #0f0"; z.id = "zoomck"; document.body.append(z); return "ok"; })()
+shot:N3-diag-zoom
+eval:document.getElementById("zoomck").remove()
+key:Control+z
+key:Control+z
+eval:__photocairn.doc.undoStack.length
+range:0:8
+drag:0.1:0.1:0.1:0.1
+tap:0.9:0.9:Shift
+shot:N4-shift-line
+eval:__photocairn.doc.undoStack.length
+range:0:200
+eval:window.__t0 = performance.now()
+path:0.1:0.2:0.9:0.3:0.1:0.6:0.9:0.8
+eval:"big path took " + Math.round(performance.now() - window.__t0) + " ms incl. 18 pointer moves"
+eval:(async () => { const ops = await import("/js/ops.js"); const s = document.createElement("canvas"); s.width = s.height = 600; const x = s.getContext("2d"); x.fillStyle = "#f00"; ops.circleSpans(600).forEach(([a, b], y) => x.fillRect(a, y, b - a, 1)); const big = document.createElement("canvas"); big.width = 3000; big.height = 2000; const bx = big.getContext("2d"); const t = performance.now(); for (let i = 0; i < 1000; i++) bx.drawImage(s, i * 2, 500 + (i % 7)); bx.getImageData(0, 0, 1, 1); return "1000 dabs at 600px: " + Math.round(performance.now() - t) + " ms"; })()
+shot:N5-big
+tool:eraser
+clicktext:Block
+range:0:40
+drag:0.3:0.3:0.5:0.3
+shot:N6-block
