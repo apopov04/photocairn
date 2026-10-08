@@ -1,7 +1,7 @@
 // Photocairn: app shell. Opening/saving files, the viewport's pointer and
 // keyboard handling, and switching between tools.
 
-import { Doc, View, makeCanvas, resizeCanvas } from "./editor.js";
+import { Doc, View, makeCanvas, resizeCanvas, makeLayer } from "./editor.js";
 import { formatBytes, fitSize } from "./ops.js";
 import { h } from "./ui.js";
 import * as T from "./tools.js";
@@ -12,7 +12,19 @@ const fileInput = $("#file"), toastEl = $("#toast");
 const view = new View($("#stage"));
 const MAX_PIXELS = 16_777_216; // iOS Safari's canvas limit (4096 x 4096)
 
-let doc = null, tool = null, toolName = null, previewSource = null;
+let doc = null, tool = null, toolName = null;
+// A tool's live preview: either of the active layer (composited with the other
+// layers) or, with whole=true, of the entire image (e.g. corners/border).
+let preview = null;
+
+function display() {
+  if (!doc) return;
+  let w = doc.width, hgt = doc.height;
+  if (preview?.whole) { view.source = preview.canvas; w = preview.w; hgt = preview.h; }
+  else view.source = doc.composite(preview?.canvas || null);
+  if (w !== view.imgW || hgt !== view.imgH) { view.imgW = w; view.imgH = hgt; view.fit(); }
+  view.dirty = true;
+}
 
 /* ----------------------------- context for tools ----------------------------- */
 
@@ -21,22 +33,21 @@ const A = {
   view,
   toast,
   redraw() { view.dirty = true; },
-  refreshView() { if (!previewSource) view.source = doc.canvas; view.dirty = true; },
+  refreshView() { doc.touch(); display(); },
+  /** Preview the active layer as `canvas` (null clears). Pass w/h to preview the whole image instead. */
   setSource(canvas, w, hgt) {
-    previewSource = canvas;
-    view.source = canvas || doc.canvas;
-    const nw = w || doc.width, nh = hgt || doc.height;
-    const changed = nw !== view.imgW || nh !== view.imgH;
-    view.imgW = nw; view.imgH = nh;
-    if (changed) view.fit();
-    view.dirty = true;
+    preview = canvas ? { canvas, whole: !!w, w, h: hgt } : null;
+    display();
   },
+  /** Flattened image of all visible layers. */
+  composite() { return doc.composite(); },
   setCursor(kind) {
     stageWrap.classList.toggle("crosshair", kind === "crosshair");
     stageWrap.classList.toggle("brush", kind === "brush");
     stageWrap.classList.toggle("pan", kind === "pan" || !kind);
   },
   setCursorStyle(css) { stageWrap.style.cursor = css || ""; },
+  addImageLayer: (blob, name) => addImageLayer(blob, name),
 };
 
 /* ------------------------------------ toast ----------------------------------- */
@@ -62,20 +73,43 @@ function decodeWithImg(blob) {
   });
 }
 
-async function openBlob(blob, name = "image") {
-  if (!blob) return;
-  if (blob.type && !blob.type.startsWith("image/")) return toast("That file isn't an image.");
-  if (doc?.canUndo && !confirm("Open a new image? Your current edits will be lost.")) return;
-  let src;
+async function decode(blob, name) {
+  if (blob.type && !blob.type.startsWith("image/")) { toast("That file isn't an image."); return null; }
   try {
-    src = await createImageBitmap(blob, { imageOrientation: "from-image" });
+    return await createImageBitmap(blob, { imageOrientation: "from-image" });
   } catch {
-    try { src = await decodeWithImg(blob); }
+    try { return await decodeWithImg(blob); }
     catch {
       const heic = /hei[cf]/i.test(blob.type + name);
-      return toast(heic ? "This browser can't open HEIC photos. On iPhone, share the photo as JPG or open it in Safari." : "Couldn't open that image.", 4500);
+      toast(heic ? "This browser can't open HEIC photos. On iPhone, share the photo as JPG or open it in Safari." : "Couldn't open that image.", 4500);
+      return null;
     }
   }
+}
+
+/** Add an image as a new layer above the selected one, scaled down to fit and centered. */
+async function addImageLayer(blob, name = "image") {
+  if (!blob || !doc) return;
+  const src = await decode(blob, name);
+  if (!src) return;
+  const s = fitSize(src.width, src.height, doc.width, doc.height);
+  const c = makeCanvas(doc.width, doc.height), x = c.getContext("2d");
+  x.imageSmoothingQuality = "high";
+  x.drawImage(src, Math.round((doc.width - s.width) / 2), Math.round((doc.height - s.height) / 2), s.width, s.height);
+  src.close?.();
+  doc.change((d) => {
+    d.layers.splice(d.active + 1, 0, makeLayer(c, baseName(name).slice(0, 30) || "Image"));
+    d.active += 1;
+  });
+  if (toolName !== "layers") selectTool("layers");
+  toast("Added as a new layer. Use Move layer to position it.");
+}
+
+async function openBlob(blob, name = "image") {
+  if (!blob) return;
+  if (doc?.canUndo && !confirm("Open a new image? Your current edits will be lost.")) return;
+  const src = await decode(blob, name);
+  if (!src) return;
   let w = src.width, hgt = src.height;
   if (w * hgt > MAX_PIXELS) {
     const s = Math.sqrt(MAX_PIXELS / (w * hgt));
@@ -95,21 +129,17 @@ function setDoc(d) {
   doc.onChange(onDocChange);
   app.classList.remove("empty");
   selectTool(null);
-  previewSource = null;
-  view.source = doc.canvas; view.imgW = doc.width; view.imgH = doc.height;
+  preview = null;
+  view.imgW = 0; display();
   requestAnimationFrame(() => { view.resize(); view.fit(); });
   updateChrome();
   document.title = `${doc.name} · Photocairn`;
 }
 
 function onDocChange() {
-  if (!previewSource) { view.source = doc.canvas; }
-  if (view.imgW !== doc.width || view.imgH !== doc.height) {
-    view.imgW = doc.width; view.imgH = doc.height;
-    if (!previewSource) view.fit();
-  }
-  view.dirty = true;
+  display();
   updateChrome();
+  updateLayerNote();
   tool?.onDocChange?.();
   scheduleExportEstimate();
 }
@@ -134,14 +164,15 @@ addEventListener("drop", (e) => {
   e.preventDefault(); dragDepth = 0;
   stageWrap.classList.remove("dragover"); $("#drop").classList.remove("dragover");
   const f = [...e.dataTransfer.files].find((f) => f.type.startsWith("image/") || /\.(heic|heif|avif)$/i.test(f.name));
-  if (f) openBlob(f, f.name); else toast("Drop an image file.");
+  if (!f) return toast("Drop an image file.");
+  doc ? addImageLayer(f, f.name) : openBlob(f, f.name);
 });
 
 // Paste.
 addEventListener("paste", (e) => {
   if (e.target.closest?.("input, textarea")) return;
   const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith("image/"));
-  if (item) { e.preventDefault(); openBlob(item.getAsFile(), "pasted"); }
+  if (item) { e.preventDefault(); doc ? addImageLayer(item.getAsFile(), "Pasted") : openBlob(item.getAsFile(), "pasted"); }
 });
 
 /* ---------------------------------- tools ---------------------------------- */
@@ -149,13 +180,14 @@ addEventListener("paste", (e) => {
 const FACTORIES = {
   cutout: T.cutoutTool, crop: T.cropTool, resize: T.resizeTool, adjust: T.adjustTool,
   looks: T.looksTool, redact: T.redactTool, draw: T.drawTool, text: T.textTool, frame: T.frameTool,
+  layers: T.layersTool, rotate: T.rotateTool,
   export: exportTool,
 };
 
 function selectTool(name) {
   if (tool) { tool.cleanup?.(); }
-  previewSource = null;
-  if (doc) { view.source = doc.canvas; view.imgW = doc.width; view.imgH = doc.height; }
+  preview = null;
+  display();
   tool = null; view.drawOverlay = null;
   A.setCursor("pan"); A.setCursorStyle("");
   panel.replaceChildren();
@@ -164,12 +196,23 @@ function selectTool(name) {
   tool = FACTORIES[name](A);
   if (tool.cursor) A.setCursor(tool.cursor);
   if (tool.overlay) view.drawOverlay = (ctx, v) => tool?.overlay(ctx, v);
+  layerNote = LAYER_TOOLS.has(name) ? h("p", { class: "layer-note" }) : null;
   panel.append(
     h("div", { class: "panel-head" }, h("h2", {}, tool.title), h("button", { class: "x", "aria-label": "Close", onclick: () => selectTool(null) }, "×")),
-    ...tool.body,
+    ...[layerNote, ...tool.body].filter(Boolean),
   );
+  updateLayerNote();
   markTool();
   view.dirty = true;
+}
+
+// Tools that edit only the selected layer (others act on the whole image).
+const LAYER_TOOLS = new Set(["cutout", "adjust", "looks", "redact", "draw"]);
+let layerNote = null;
+function updateLayerNote() {
+  if (!layerNote || !doc) return;
+  layerNote.hidden = !doc.hasLayers;
+  layerNote.textContent = `Editing layer: ${doc.layer.name}`;
 }
 
 function markTool() {
@@ -341,7 +384,8 @@ function hasTransparency(canvas) {
 
 function renderExport(o) {
   const w = Math.max(1, Math.round((doc.width * o.scale) / 100)), hgt = Math.max(1, Math.round((doc.height * o.scale) / 100));
-  let c = o.scale === 100 ? doc.canvas : resizeCanvas(doc.canvas, w, hgt);
+  const flat = doc.composite();
+  let c = o.scale === 100 ? flat : resizeCanvas(flat, w, hgt);
   if (o.format === "image/jpeg") { // JPEG has no transparency: put it on white
     const flat = makeCanvas(c.width, c.height), x = flat.getContext("2d");
     x.fillStyle = "#fff"; x.fillRect(0, 0, flat.width, flat.height); x.drawImage(c, 0, 0);
@@ -353,7 +397,7 @@ function renderExport(o) {
 function exportTool() {
   const frag = $("#tpl-export").content.cloneNode(true);
   const root = h("div", { style: "display:contents" }, frag);
-  const transparent = hasTransparency(doc.canvas);
+  const transparent = hasTransparency(doc.composite());
   const o = {
     format: localStorage.getItem("pc-format") || (transparent ? "image/png" : "image/jpeg"),
     quality: 85, scale: 100,
@@ -423,4 +467,4 @@ if ("launchQueue" in window) {
 }
 
 // Debug/test hook (used by the automated browser tests).
-window.__photocairn = { open: openBlob, get doc() { return doc; }, view, selectTool };
+window.__photocairn = { open: openBlob, addLayer: addImageLayer, get doc() { return doc; }, view, selectTool };

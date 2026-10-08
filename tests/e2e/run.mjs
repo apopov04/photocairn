@@ -3,7 +3,8 @@
 //   CHROME=/path/to/chrome node tests/e2e/run.mjs tests/e2e/tools.txt
 // Each line of a scenario file is a step: tool:<name>, clicktext:<label>,
 // drag:x1:y1:x2:y2 (fractions of the canvas), range:<index>:<value>,
-// waitfor:<js expr>, eval:<js expr>, key:<combo>, shot:<name>, wait:<ms>.
+// waitfor:<js expr>, eval:<js expr>, key:<combo>, shot:<name>, wait:<ms>,
+// addlayer:<image path>, select:<css>:<value>. Set URL= to test a deployed copy.
 // Needs `npm i -D puppeteer-core`.
 import puppeteer from "puppeteer-core";
 import fs from "fs";
@@ -20,7 +21,7 @@ page.on("workercreated", (w) => { w.on("console", (m) => errors.push(`[worker ${
 page.on("error", (e) => errors.push(`[crash] ${e.message}`));
 const W = +process.env.W || 1280, H = +process.env.H || 800;
 await page.setViewport({ width: W, height: H, deviceScaleFactor: 1, isMobile: W < 700, hasTouch: W < 700 });
-await page.goto("http://localhost:8080/", { waitUntil: "networkidle0" });
+await page.goto(process.env.URL || "http://localhost:8080/", { waitUntil: "networkidle0" });
 const shot = async (n) => { await new Promise((r) => setTimeout(r, 250)); await page.screenshot({ path: `${shots}/${process.env.P || ""}${n}.png` }); };
 await shot("01-welcome");
 const img = fs.readFileSync(process.env.IMG || new URL("./sample.jpg", import.meta.url).pathname).toString("base64");
@@ -45,6 +46,8 @@ for (const s of steps) { console.error("step", s);
     for (let i = 1; i <= 8; i++) await page.mouse.move(r.x + r.w * (x1 + (x2 - x1) * i / 8), r.y + r.h * (y1 + (y2 - y1) * i / 8));
     await page.mouse.up();
   }
+  else if (name === "addlayer") { await page.evaluate(async (b64) => { const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)); await window.__photocairn.addLayer(new Blob([bin], { type: "image/jpeg" }), "pug.jpg"); }, fs.readFileSync(args[0]).toString("base64")); }
+  else if (name === "select") { await page.evaluate((sel, v) => { const e = document.querySelector(sel); e.value = v; e.dispatchEvent(new Event("change")); }, args[0], args[1]); }
   else if (name === "key") { const ks = args[0].split("+"); for (const k of ks.slice(0, -1)) await page.keyboard.down(k); await page.keyboard.press(ks.at(-1)); for (const k of ks.slice(0, -1).reverse()) await page.keyboard.up(k); }
   else if (name === "shot") { await shot(args[0]); }
   else if (name === "eval") { console.log("eval:", await page.evaluate(new Function(`return (${args.join(":")})`))); }

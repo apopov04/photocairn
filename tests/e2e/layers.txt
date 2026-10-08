@@ -1,0 +1,43 @@
+tool:layers
+eval:__photocairn.doc.layers.length
+addlayer:tests/e2e/sample.jpg
+eval:[__photocairn.doc.layers.length, __photocairn.doc.active, __photocairn.doc.layers.map(l=>l.name).join("|")].join(" ")
+range:0:60
+select:#panel select:multiply
+shot:L1-opacity-blend
+clicktext:✥ Move layer
+drag:0.5:0.5:0.65:0.4
+shot:L2-moved
+eval:__photocairn.doc.undoStack.length
+click:#panel .layers li:last-child .eye
+shot:L3-hidden-bottom
+click:#panel .layers li:last-child .eye
+tool:text
+clicktext:Add text
+eval:__photocairn.doc.layers.map(l=>l.name).join("|")
+tool:adjust
+range:0:-80
+clicktext:Apply
+wait:400
+shot:L4-adjust-text-layer
+tool:rotate
+clicktext:↻ Rotate right
+eval:__photocairn.doc.layers.map(l=>l.canvas.width+"x"+l.canvas.height).join(" ")
+clicktext:↔ Flip horizontal
+tool:crop
+clicktext:1:1
+clicktext:Crop
+eval:__photocairn.doc.layers.map(l=>l.canvas.width+"x"+l.canvas.height).join(" ")
+shot:L5-rot-crop
+tool:layers
+clicktext:Merge down
+eval:__photocairn.doc.layers.map(l=>l.name).join("|")
+clicktext:Flatten
+eval:__photocairn.doc.layers.length
+key:Control+z
+key:Control+z
+eval:__photocairn.doc.layers.length
+click:#btn-export
+wait:600
+eval:document.querySelector("#export-meta").textContent
+shot:L6-export

@@ -3,7 +3,7 @@
 // onDocChange? }. Pointer callbacks receive points in image coordinates.
 
 import * as ops from "./ops.js";
-import { makeCanvas, ctx2d, copyCanvas, getImageData, canvasFromImageData, resizeCanvas } from "./editor.js";
+import { makeCanvas, ctx2d, copyCanvas, getImageData, canvasFromImageData, resizeCanvas, makeLayer, BLEND_MODES } from "./editor.js";
 import { h, slider, seg, swatches, progress, nextFrame } from "./ui.js";
 
 const minSide = (d) => Math.min(d.width, d.height);
@@ -213,6 +213,18 @@ export function cutoutTool(A) {
   };
 }
 
+export function rotateCanvas90(d, dir) {
+  const c = makeCanvas(d.height, d.width), x = c.getContext("2d");
+  x.translate(c.width / 2, c.height / 2); x.rotate((dir * Math.PI) / 2); x.drawImage(d, -d.width / 2, -d.height / 2);
+  return c;
+}
+
+export function flipCanvas(d, horizontal) {
+  const c = makeCanvas(d.width, d.height), x = c.getContext("2d");
+  x.translate(horizontal ? d.width : 0, horizontal ? 0 : d.height); x.scale(horizontal ? -1 : 1, horizontal ? 1 : -1); x.drawImage(d, 0, 0);
+  return c;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Crop & rotate                                                               */
 /* -------------------------------------------------------------------------- */
@@ -248,16 +260,18 @@ export function cropTool(A) {
     A.redraw();
   }
 
-  function renderRotation() {
-    if (!angle) { rotated = null; A.setSource(null); return; }
-    const d = doc().canvas;
-    rotated = makeCanvas(d.width, d.height);
-    const x = rotated.getContext("2d");
+  const rotateBy = (d, deg) => {
+    const out = makeCanvas(d.width, d.height), x = out.getContext("2d");
     x.imageSmoothingQuality = "high";
     x.translate(d.width / 2, d.height / 2);
-    x.rotate((angle * Math.PI) / 180);
+    x.rotate((deg * Math.PI) / 180);
     x.drawImage(d, -d.width / 2, -d.height / 2);
-    A.setSource(rotated);
+    return out;
+  };
+  function renderRotation() {
+    if (!angle) { rotated = null; A.setSource(null); return; }
+    rotated = rotateBy(A.composite(), angle);
+    A.setSource(rotated, rotated.width, rotated.height);
   }
 
   const straighten = slider({
@@ -265,30 +279,20 @@ export function cropTool(A) {
     onInput: (v) => { angle = v; renderRotation(); resetRect(); },
   });
 
-  const transform = (fn) => {
-    const d = doc().canvas;
-    const out = fn(d);
-    doc().commit(out);
-  };
-  const rotate90 = (dir) => transform((d) => {
-    const c = makeCanvas(d.height, d.width), x = c.getContext("2d");
-    x.translate(c.width / 2, c.height / 2); x.rotate((dir * Math.PI) / 2); x.drawImage(d, -d.width / 2, -d.height / 2);
-    return c;
-  });
-  const flip = (hz) => transform((d) => {
-    const c = makeCanvas(d.width, d.height), x = c.getContext("2d");
-    x.translate(hz ? d.width : 0, hz ? 0 : d.height); x.scale(hz ? -1 : 1, hz ? 1 : -1); x.drawImage(d, 0, 0);
-    return c;
-  });
+  const rotate90 = (dir) => { doc().commitAll((d) => rotateCanvas90(d, dir)); A.view.fit(); };
+  const flip = (hz) => doc().commitAll((d) => flipCanvas(d, hz));
 
   function apply() {
-    const src = rotated || doc().canvas;
     const r = { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.max(1, Math.round(rect.w)), h: Math.max(1, Math.round(rect.h)) };
     if (!angle && r.x === 0 && r.y === 0 && r.w === doc().width && r.h === doc().height) return A.toast("Drag the corners to choose what to keep.");
-    const c = makeCanvas(r.w, r.h);
-    c.getContext("2d").drawImage(src, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
+    const deg = angle;
     angle = 0; straighten.set(0); rotated = null; A.setSource(null);
-    doc().commit(c);
+    doc().commitAll((layer) => {
+      const src = deg ? rotateBy(layer, deg) : layer;
+      const c = makeCanvas(r.w, r.h);
+      c.getContext("2d").drawImage(src, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
+      return c;
+    });
     A.view.fit();
   }
 
@@ -442,7 +446,7 @@ export function resizeTool(A) {
       meta,
       applyButtons(() => {
         if (w === A.doc.width && hgt === A.doc.height) return A.toast("That's already the current size.");
-        A.doc.commit(resizeCanvas(A.doc.canvas, w, hgt));
+        A.doc.commitAll((c) => resizeCanvas(c, w, hgt));
         A.view.fit();
       }, () => setPct(1), "Resize"),
     ],
@@ -731,9 +735,15 @@ export function textTool(A) {
   area.addEventListener("input", () => { t.text = area.value; A.redraw(); });
   const btns = applyButtons(() => {
     if (!t.text.trim()) return A.toast("Type some text first.");
-    A.doc.commit((c) => paintText(c.getContext("2d"), t));
+    // Each text goes on its own layer so it can be moved or removed later.
+    A.doc.change((d) => {
+      const c = makeCanvas(d.width, d.height);
+      paintText(c.getContext("2d"), t);
+      d.layers.splice(d.active + 1, 0, makeLayer(c, `Text: ${t.text.trim().split("\n")[0].slice(0, 24)}`));
+      d.active += 1;
+    });
     placed = false;
-    A.toast("Text added. Tap the photo to place another.");
+    A.toast("Text added as a new layer. Tap the photo to place another.");
   }, () => { t.x = A.doc.width / 2; t.y = A.doc.height / 2; placed = true; A.redraw(); }, "Add text");
   setTimeout(() => { area.focus(); area.select(); }, 50);
   const bounds = () => {
@@ -793,7 +803,7 @@ export function textTool(A) {
 export function frameTool(A) {
   const v = { radius: 0, circle: false, pad: 0, color: "transparent" };
   const render = () => {
-    const out = frame(A.doc.canvas, v);
+    const out = frame(A.composite(), v);
     A.setSource(out, out.width, out.height);
   };
   const frame = (src, o) => {
@@ -836,12 +846,217 @@ export function frameTool(A) {
       h("p", { class: "note" }, "Rounded and circle shapes need PNG or WebP to keep the corners transparent."),
       applyButtons(() => {
         if (!v.radius && !v.circle && !v.pad) return A.toast("Choose a corner, circle or border first.");
-        const out = frame(A.doc.canvas, v);
+        const opts = { ...v };
         reset();
-        A.doc.commit(out);
+        // The border color goes on the bottom layer only.
+        A.doc.commitAll((c, i) => frame(c, i === 0 ? opts : { ...opts, color: "transparent" }));
         A.view.fit();
       }, reset),
     ],
     cleanup() { A.setSource(null); },
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Rotate & flip                                                               */
+/* -------------------------------------------------------------------------- */
+
+/** Rotate by any angle; with expand=true the canvas grows to fit (transparent corners). */
+export function rotateFree(d, deg, expand, w = d.width, hgt = d.height) {
+  const rad = (deg * Math.PI) / 180, sin = Math.abs(Math.sin(rad)), cos = Math.abs(Math.cos(rad));
+  const ow = expand ? Math.round(w * cos + hgt * sin) : d.width;
+  const oh = expand ? Math.round(w * sin + hgt * cos) : d.height;
+  const c = makeCanvas(ow, oh), x = c.getContext("2d");
+  x.imageSmoothingQuality = "high";
+  x.translate(ow / 2, oh / 2); x.rotate(rad); x.drawImage(d, -d.width / 2, -d.height / 2);
+  return c;
+}
+
+export function rotateTool(A) {
+  let scope = "image", angle = 0;
+  const layerOnly = () => scope === "layer" && A.doc.hasLayers;
+  const scopeSeg = seg([{ value: "image", label: "Whole image" }, { value: "layer", label: "Current layer" }], scope, (v) => { scope = v; angleSlider.set(0); angle = 0; A.setSource(null); });
+  const scopeRow = h("label", {}, "Apply to", scopeSeg);
+  const run = (fnImage, fnLayer) => {
+    if (layerOnly()) A.doc.commit(fnLayer(A.doc.canvas), {});
+    else { A.doc.commitAll(fnImage); A.view.fit(); }
+  };
+  const preview = () => {
+    if (!angle) return A.setSource(null);
+    if (layerOnly()) A.setSource(rotateFree(A.doc.canvas, angle, false));
+    else { const c = rotateFree(A.composite(), angle, true); A.setSource(c, c.width, c.height); }
+  };
+  const angleSlider = slider({ label: "Angle", min: -180, max: 180, step: 0.5, value: 0, format: (v) => `${v}°`, onInput: (v) => { angle = v; preview(); } });
+  const sync = () => { scopeRow.hidden = !A.doc.hasLayers; };
+  sync();
+  return {
+    title: "Rotate & flip",
+    body: [
+      scopeRow,
+      h("div", { class: "row" },
+        h("button", { class: "grow", title: "Rotate 90° left", onclick: () => run((c) => rotateCanvas90(c, -1), (c) => rotateFree(c, -90, false)) }, "↺ Rotate left"),
+        h("button", { class: "grow", title: "Rotate 90° right", onclick: () => run((c) => rotateCanvas90(c, 1), (c) => rotateFree(c, 90, false)) }, "↻ Rotate right")),
+      h("div", { class: "row" },
+        h("button", { class: "grow", onclick: () => run((c) => flipCanvas(c, true), (c) => flipCanvas(c, true)) }, "↔ Flip horizontal"),
+        h("button", { class: "grow", onclick: () => run((c) => flipCanvas(c, false), (c) => flipCanvas(c, false)) }, "↕ Flip vertical")),
+      angleSlider,
+      h("p", { class: "hint" }, "Any angle. The whole image grows to fit; use Crop › Straighten to level a tilted horizon instead."),
+      applyButtons(() => {
+        if (!angle) return A.toast("Move the angle slider first.");
+        const deg = angle; angle = 0; angleSlider.set(0); A.setSource(null);
+        if (layerOnly()) A.doc.commit(rotateFree(A.doc.canvas, deg, false), {});
+        else {
+          const W = A.doc.width, H = A.doc.height;
+          A.doc.commitAll((c) => rotateFree(c, deg, true, W, H));
+          A.view.fit();
+        }
+      }, () => { angle = 0; angleSlider.set(0); A.setSource(null); }, "Rotate"),
+    ],
+    onDocChange() { sync(); if (angle) preview(); },
+    cleanup() { A.setSource(null); },
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Layers                                                                      */
+/* -------------------------------------------------------------------------- */
+
+function thumb(layer, w, hgt) {
+  const s = ops.fitSize(w, hgt, 44, 44);
+  const c = makeCanvas(s.width, s.height);
+  c.getContext("2d").drawImage(layer.canvas, 0, 0, s.width, s.height);
+  c.className = "lthumb";
+  return c;
+}
+
+const EYE = '<svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_OFF = '<svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 5.1A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+
+export function layersTool(A) {
+  let moving = false, drag = null;
+  const list = h("ol", { class: "layers", "aria-label": "Layers (top first)" });
+  const opacity = slider({
+    label: "Opacity", min: 0, max: 100, value: 100, format: (v) => `${v}%`,
+    onInput: (v) => liveProp({ opacity: v / 100 }),
+    onChange: () => endLive(),
+  });
+  const blend = h("select", { "aria-label": "Blend mode" }, BLEND_MODES.map(([v, label]) => h("option", { value: v }, label)));
+  blend.onchange = () => A.doc.setLayerProps(A.doc.active, { blend: blend.value });
+
+  // Live property edits record one undo step per gesture.
+  let liveStarted = false;
+  function liveProp(props) {
+    const d = A.doc;
+    if (!liveStarted) { d.record(); liveStarted = true; }
+    d.layers[d.active] = { ...d.layer, ...props };
+    A.refreshView();
+  }
+  function endLive() { if (liveStarted) { liveStarted = false; A.doc.emit(); } }
+
+  const btn = (label, title, onclick, cls = "") => h("button", { title, "aria-label": title, class: cls, onclick }, label);
+  const addBlank = () => A.doc.change((d) => {
+    d.layers.splice(d.active + 1, 0, makeLayer(makeCanvas(d.width, d.height), `Layer ${d.layers.length + 1}`));
+    d.active += 1;
+  });
+  const duplicate = () => A.doc.change((d) => {
+    const l = d.layer;
+    d.layers.splice(d.active + 1, 0, makeLayer(copyCanvas(l.canvas), `${l.name} copy`, { opacity: l.opacity, blend: l.blend, visible: l.visible }));
+    d.active += 1;
+  });
+  const remove = () => {
+    if (!A.doc.hasLayers) return A.toast("An image needs at least one layer.");
+    A.doc.change((d) => { d.layers.splice(d.active, 1); d.active = Math.min(d.active, d.layers.length - 1); });
+  };
+  const moveBy = (dir) => {
+    const d = A.doc, j = d.active + dir;
+    if (j < 0 || j >= d.layers.length) return;
+    d.change((d) => { [d.layers[d.active], d.layers[j]] = [d.layers[j], d.layers[d.active]]; d.active = j; });
+  };
+  const mergeDown = () => {
+    const d = A.doc;
+    if (d.active === 0) return A.toast("There's no layer below to merge into.");
+    d.change((d) => {
+      const top = d.layers[d.active], below = d.layers[d.active - 1];
+      const c = copyCanvas(below.canvas), x = c.getContext("2d");
+      if (top.visible) { x.globalAlpha = top.opacity; x.globalCompositeOperation = top.blend; x.drawImage(top.canvas, 0, 0); }
+      d.layers.splice(d.active - 1, 2, { ...below, canvas: c, meta: {} });
+      d.active -= 1;
+    });
+  };
+  const flatten = () => {
+    if (!A.doc.hasLayers) return A.toast("There's only one layer.");
+    A.doc.change((d) => { d.layers = [makeLayer(copyCanvas(d.composite()), "Background")]; d.active = 0; });
+  };
+  const rename = (i) => {
+    const name = prompt("Layer name", A.doc.layers[i].name);
+    if (name && name.trim()) A.doc.setLayerProps(i, { name: name.trim().slice(0, 40) });
+  };
+
+  const moveBtn = h("button", { class: "grow", onclick: () => { moving = !moving; moveBtn.classList.toggle("on", moving); A.setCursorStyle(moving ? "move" : ""); } }, "✥ Move layer");
+
+  function render() {
+    const d = A.doc;
+    list.replaceChildren();
+    for (let i = d.layers.length - 1; i >= 0; i--) {
+      const l = d.layers[i];
+      const eye = h("button", { class: "icon-btn eye", title: l.visible ? "Hide layer" : "Show layer", "aria-label": l.visible ? "Hide layer" : "Show layer", html: l.visible ? EYE : EYE_OFF });
+      eye.onclick = (e) => { e.stopPropagation(); d.setLayerProps(i, { visible: !l.visible }); };
+      const name = h("span", { class: "lname", title: "Double-click to rename" }, l.name);
+      const sub = h("span", { class: "lsub" }, [l.opacity < 1 ? `${Math.round(l.opacity * 100)}%` : "", l.blend !== "source-over" ? BLEND_MODES.find((b) => b[0] === l.blend)[1] : ""].filter(Boolean).join(" · "));
+      const li = h("li", {
+        class: `${i === d.active ? "active" : ""} ${l.visible ? "" : "hidden-layer"}`, tabindex: 0,
+        onclick: () => { if (d.active !== i) { d.active = i; d.emit(); } },
+        ondblclick: () => rename(i),
+        onkeydown: (e) => { if (e.key === "Enter") rename(i); },
+      }, thumb(l, d.width, d.height), h("span", { class: "linfo" }, name, sub), eye);
+      list.append(li);
+    }
+    opacity.set(Math.round(d.layer.opacity * 100));
+    blend.value = d.layer.blend;
+  }
+
+  const addInput = h("input", { type: "file", accept: "image/*", hidden: true });
+  addInput.onchange = () => { const f = addInput.files[0]; addInput.value = ""; if (f) A.addImageLayer(f, f.name); };
+
+  render();
+  return {
+    title: "Layers",
+    body: [
+      list,
+      h("div", { class: "layer-actions" },
+        btn("+ New", "New empty layer", addBlank),
+        btn("+ Image", "Add a photo as a new layer", () => addInput.click()),
+        btn("Duplicate", "Duplicate layer", duplicate),
+        btn("Delete", "Delete layer", remove, "danger")),
+      h("div", { class: "layer-actions" },
+        btn("↑ Up", "Move layer up", () => moveBy(1)),
+        btn("↓ Down", "Move layer down", () => moveBy(-1)),
+        btn("Merge down", "Merge into the layer below", mergeDown),
+        btn("Flatten", "Merge all layers into one", flatten)),
+      h("div", { class: "sub" }, "Selected layer"),
+      opacity,
+      h("label", {}, "Blend mode", blend),
+      h("div", { class: "row" }, moveBtn),
+      h("p", { class: "hint" }, "Other tools edit the selected layer. Crop, resize, rotate and corners apply to the whole image. You can also paste or drop a photo to add it as a layer."),
+      addInput,
+    ],
+    onDocChange: render,
+    get wantsPointer() { return moving; },
+    down(p) { drag = { start: p, base: A.doc.canvas }; },
+    move(p) {
+      if (!drag) return;
+      const dx = Math.round(p.x - drag.start.x), dy = Math.round(p.y - drag.start.y);
+      const c = makeCanvas(A.doc.width, A.doc.height);
+      c.getContext("2d").drawImage(drag.base, dx, dy);
+      drag.shifted = c; drag.dx = dx; drag.dy = dy;
+      A.setSource(c);
+    },
+    up() {
+      if (!drag) return;
+      const { shifted, dx, dy } = drag; drag = null;
+      A.setSource(null);
+      if (shifted && (dx || dy)) A.doc.commit(shifted, {});
+    },
+    cleanup() { A.setCursorStyle(""); },
   };
 }

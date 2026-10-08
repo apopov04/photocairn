@@ -1,6 +1,6 @@
 // Offline support. The app shell is cached on install; everything else
 // (AI models, the WebAssembly runtime) is cached the first time it's used.
-const VERSION = "photocairn-v1";
+const VERSION = "photocairn-v2";
 const SHELL = [
   "./", "index.html", "css/app.css", "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png",
   "js/main.js", "js/editor.js", "js/ops.js", "js/tools.js", "js/ui.js", "js/bg-worker.js",

@@ -103,6 +103,21 @@ button.primary.on { background: var(--accent); box-shadow: 0 0 0 3px color-mix(i
 @keyframes indet { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
 .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px; background: var(--surface-2); color: var(--muted); }
 
+/* Layers */
+.layers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
+.layers li { display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 8px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; background: var(--bg); user-select: none; }
+.layers li.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--surface)); }
+.layers li.hidden-layer .lthumb, .layers li.hidden-layer .linfo { opacity: .45; }
+.layers li:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.lthumb { width: 44px; height: 44px; object-fit: contain; border-radius: 6px; flex: none; background: repeating-conic-gradient(#d9d9de 0 25%, #fff 0 50%) 0 0 / 8px 8px; border: 1px solid var(--line); }
+.linfo { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.lname { font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lsub { font-size: 11px; color: var(--muted); }
+.layers .eye { padding: 6px; color: var(--muted); }
+.layer-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.layer-actions button { padding: 7px 4px; font-size: 12px; font-weight: 500; }
+.layer-note { margin: -6px 0 0; font-size: 12px; color: var(--accent); font-weight: 550; }
+
 /* Welcome */
 .welcome { grid-column: 1 / -1; overflow-y: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 20px; gap: 26px; }
 #app:not(.empty) .welcome { display: none; }
@@ -136,3 +151,4 @@ button.primary.on { background: var(--accent); box-shadow: 0 0 0 3px color-mix(i
   .drop { padding: 30px 18px; }
   .toast { bottom: 96px; }
 }
+.panel .row button.grow { white-space: nowrap; font-size: 13px; padding-left: 8px; padding-right: 8px; }

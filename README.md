@@ -17,13 +17,15 @@ Photocairn is a fast, focused editor for exactly those jobs. **Everything runs o
 - **Remove background.** AI cutout that runs locally. Choose *Fast* (4.6 MB model) or *Best quality* (44 MB, cached after the first use). You can then:
   - keep the background transparent, swap in a solid color or blur the original background
   - touch up the edges with *Erase* and *Restore* brushes
-- **Crop & rotate.** Free crop or presets (1:1, 4:5, 3:2, 16:9, 9:16). Also rotate 90°, flip, and straighten with an automatic crop.
+- **Layers.** Stack photos, text and drawings. Each layer can be shown or hidden, renamed, reordered, duplicated, moved, merged or flattened, and has its own opacity and blend mode (Multiply, Screen, Overlay, Soft light and 12 more). Paste or drop a photo to add it as a layer. Other tools edit the selected layer; crop, resize, rotate and corners apply to the whole image.
+- **Crop.** Free crop or presets (1:1, 4:5, 3:2, 16:9, 9:16), and straighten with an automatic crop.
+- **Rotate & flip.** Rotate 90° left or right, flip horizontally or vertically, or rotate by any angle. Works on the whole image or just the current layer.
 - **Resize.** By pixels or percent, with one-tap sizes (1080 px, 1920 px, 512 px). Downscaling uses multiple steps so results stay sharp.
 - **Adjust.** Brightness, contrast, exposure, highlights, shadows, saturation, warmth, tint, sharpen and soften.
 - **Filters.** Mono, Sepia, Vivid, Warm, Cool, Fade, Noir, Vintage and Invert, each with a strength slider.
 - **Blur out.** Drag over faces, plates or private details to blur, pixelate or cover them with a solid box.
 - **Draw.** Pen, highlighter, arrows, lines, boxes and circles, for marking up screenshots.
-- **Text.** Captions with outline and background options. Drag to place.
+- **Text.** Captions with outline and background options. Drag to place. Each text goes on its own layer.
 - **Corners & border.** Rounded corners, circle crop for profile pictures, and colored or transparent borders.
 - **Save.** PNG, JPG or WebP, with a quality slider, an output size slider and a live file-size estimate. You can also copy to the clipboard. **Location and camera data (EXIF) are always removed.**
 - **Editing basics:**
@@ -75,7 +77,7 @@ npm i && CHROME=/path/to/chrome npm run test:e2e   # browser end-to-end scenario
 ## How it's built
 
 - `js/ops.js`: pure pixel operations (adjustments, filters, blur, sharpen, pixelate, mask handling). They don't touch the DOM, so they're unit-tested in Node.
-- `js/editor.js`: the document model (working canvas plus memory-capped undo history) and the zoomable viewport.
+- `js/editor.js`: the document model (layers plus memory-capped undo history) and the zoomable viewport. Layers are immutable snapshots, so undo stores references instead of pixel copies.
 - `js/tools.js`: one factory per tool. Each one builds its panel and handles pointer input in image coordinates.
 - `js/bg-worker.js`: background removal in a Web Worker. It runs [U²-Net](https://github.com/xuebinqin/U-2-Net) models with [ONNX Runtime Web](https://onnxruntime.ai/), and the mask is upscaled and applied on a canvas.
 - `sw.js`: service worker for offline use.

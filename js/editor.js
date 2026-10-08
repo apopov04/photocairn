@@ -49,54 +49,130 @@ export function resizeCanvas(src, w, h) {
 
 const HISTORY_BUDGET = 400 * 1024 * 1024; // bytes of pixels kept for undo
 
+export const BLEND_MODES = [
+  ["source-over", "Normal"], ["multiply", "Multiply"], ["screen", "Screen"], ["overlay", "Overlay"],
+  ["darken", "Darken"], ["lighten", "Lighten"], ["color-dodge", "Color dodge"], ["color-burn", "Color burn"],
+  ["hard-light", "Hard light"], ["soft-light", "Soft light"], ["difference", "Difference"], ["exclusion", "Exclusion"],
+  ["hue", "Hue"], ["saturation", "Saturation"], ["color", "Color"], ["luminosity", "Luminosity"],
+];
+
+let layerSeq = 0;
+/**
+ * A layer is a full-document-size canvas plus display properties. Layer
+ * objects are treated as immutable snapshots: edits replace the object (and a
+ * canvas is never drawn into after it has been recorded in history), so undo
+ * can keep references instead of pixel copies.
+ */
+export function makeLayer(canvas, name, props = {}) {
+  return { id: ++layerSeq, name, canvas, visible: true, opacity: 1, blend: "source-over", meta: {}, ...props };
+}
+
 export class Doc {
   constructor(canvas, name = "image") {
-    this.canvas = canvas;
+    this.width = canvas.width;
+    this.height = canvas.height;
+    this.layers = [makeLayer(canvas, "Background")];
+    this.active = 0;
     this.original = copyCanvas(canvas);
     this.name = name;
     this.undoStack = [];
     this.redoStack = [];
-    // Tool-specific state that must travel with undo/redo (e.g. the cutout's
-    // subject + original pixels). Any ordinary edit resets it.
-    this.meta = {};
     this.listeners = new Set();
+    this.version = 0;
+    this._composite = null;
   }
-  get width() { return this.canvas.width; }
-  get height() { return this.canvas.height; }
+
+  /* ---- active layer shortcuts (what most tools edit) ---- */
+  get layer() { return this.layers[this.active]; }
+  get canvas() { return this.layer.canvas; }
+  set canvas(c) { this.layers[this.active] = { ...this.layer, canvas: c }; this.touch(); }
+  get meta() { return this.layer.meta; }
+  set meta(m) { this.layers[this.active] = { ...this.layer, meta: m }; }
 
   onChange(fn) { this.listeners.add(fn); }
-  emit() { for (const fn of this.listeners) fn(this); }
+  emit() { this.touch(); for (const fn of this.listeners) fn(this); }
+  touch() { this.version++; this._composite = null; }
 
-  snapshot() {
-    // Canvases are never mutated after they are pushed (begin/commit copy first),
-    // so history can hold references instead of copies.
-    return { canvas: this.canvas, meta: this.meta };
+  /** All visible layers flattened, optionally swapping in a preview for one layer. */
+  composite(override = null, overrideIndex = this.active) {
+    const only = this.layers.length === 1 && this.layers[0];
+    if (only && only.visible && only.opacity === 1) return override || only.canvas; // fast path
+    if (!override && this._composite) return this._composite;
+    const out = makeCanvas(this.width, this.height);
+    const x = out.getContext("2d");
+    this.layers.forEach((l, i) => {
+      if (!l.visible || l.opacity <= 0) return;
+      x.globalAlpha = l.opacity;
+      x.globalCompositeOperation = l.blend;
+      x.drawImage(i === overrideIndex && override ? override : l.canvas, 0, 0, this.width, this.height);
+    });
+    if (!override) this._composite = out;
+    return out;
   }
 
-  /** Record the current state, then replace the canvas (or mutate via fn). */
-  commit(next, meta = {}) {
+  get hasLayers() { return this.layers.length > 1; }
+
+  /* ---- history ---- */
+  snapshot() {
+    return { layers: this.layers.slice(), active: this.active, width: this.width, height: this.height };
+  }
+  restore(s) {
+    this.layers = s.layers; this.active = s.active; this.width = s.width; this.height = s.height;
+  }
+  record() {
     this.undoStack.push(this.snapshot());
     this.redoStack = [];
     this.trim();
-    if (typeof next === "function") { this.canvas = copyCanvas(this.canvas); next(this.canvas); }
-    else if (next) this.canvas = next;
-    this.meta = meta;
+  }
+
+  /** Replace the active layer's pixels (canvas, or fn that draws into a copy). */
+  commit(next, meta = {}) {
+    this.record();
+    let c = next;
+    if (typeof next === "function") { c = copyCanvas(this.canvas); next(c); }
+    this.layers[this.active] = { ...this.layer, canvas: c, meta };
     this.emit();
   }
 
-  /** Push history before an in-place drawing gesture (brush strokes). */
+  /** Start an in-place drawing gesture on the active layer (brush strokes). */
   begin() {
-    this.undoStack.push(this.snapshot());
-    this.redoStack = [];
-    this.trim();
-    this.canvas = copyCanvas(this.canvas);
-    this.meta = { ...this.meta };
+    this.record();
+    this.layers[this.active] = { ...this.layer, canvas: copyCanvas(this.canvas), meta: { ...this.meta } };
+  }
+
+  /** Transform every layer (crop, resize, rotate...). fn(canvas) returns a new canvas. */
+  commitAll(fn) {
+    this.record();
+    this.layers = this.layers.map((l, i) => ({ ...l, canvas: fn(l.canvas, i), meta: {} }));
+    this.width = this.layers[0].canvas.width;
+    this.height = this.layers[0].canvas.height;
+    this.emit();
+  }
+
+  /** Change layer structure/properties with one undo step. fn mutates this.layers/this.active. */
+  change(fn) {
+    this.record();
+    fn(this);
+    this.active = Math.max(0, Math.min(this.layers.length - 1, this.active));
+    this.emit();
+  }
+
+  setLayerProps(i, props, recordHistory = true) {
+    if (recordHistory) this.record();
+    this.layers[i] = { ...this.layers[i], ...props };
+    this.emit();
   }
 
   trim() {
+    // Count each canvas once: snapshots share unchanged layers.
+    const seen = new Set();
     let bytes = 0;
     for (let i = this.undoStack.length - 1; i >= 0; i--) {
-      bytes += this.undoStack[i].canvas.width * this.undoStack[i].canvas.height * 4;
+      for (const l of this.undoStack[i].layers) {
+        if (seen.has(l.canvas)) continue;
+        seen.add(l.canvas);
+        bytes += l.canvas.width * l.canvas.height * 4;
+      }
       if (bytes > HISTORY_BUDGET && i < this.undoStack.length - 2) {
         this.undoStack.splice(0, i + 1);
         break;
@@ -110,16 +186,14 @@ export class Doc {
   undo() {
     if (!this.canUndo) return;
     this.redoStack.push(this.snapshot());
-    const s = this.undoStack.pop();
-    this.canvas = s.canvas; this.meta = s.meta;
+    this.restore(this.undoStack.pop());
     this.emit();
   }
 
   redo() {
     if (!this.canRedo) return;
     this.undoStack.push(this.snapshot());
-    const s = this.redoStack.pop();
-    this.canvas = s.canvas; this.meta = s.meta;
+    this.restore(this.redoStack.pop());
     this.emit();
   }
 }

@@ -1,0 +1,9 @@
+tool:rotate
+range:0:20
+shot:R1-angle-preview
+clicktext:Rotate
+eval:[__photocairn.doc.width,__photocairn.doc.height].join("x")
+clicktext:↕ Flip vertical
+shot:R2-applied
+tool:layers
+eval:document.querySelector("#panel").textContent.includes("null")
