@@ -25,6 +25,21 @@ On phones, the tools sit along the bottom and the options and layers share a tab
 - Open PNG, JPG, WebP, AVIF, GIF and **PSD** (with layers). You can also drag & drop, paste from the clipboard, or start a **new blank image** (with presets; white, transparent or colored background).
 - Save as PNG, JPG, WebP or **layered PSD** (opens in Photoshop, GIMP and Photopea), with quality and size sliders and a live file-size estimate, or copy to the clipboard. **Location and camera data (EXIF) are always removed.**
 
+**Metadata remover** (File › Metadata, or from the start screen without opening the editor)
+- Shows everything hidden in a JPEG, PNG or WebP:
+  - **GPS location**, with a map link
+  - camera make/model, lens and **serial numbers**, software
+  - dates and times
+  - author, captions and copyright
+  - shooting settings
+  - maker notes
+  - the **embedded thumbnail**, which can show the photo before it was cropped
+  - XMP, IPTC, comments, color profile
+  - extra data after the image, such as motion-photo video
+- Tick what to scrub, or use one click for *Private info*, *Everything* or *Nothing*, then download a cleaned copy.
+- The image data is copied byte for byte, so there's **no re-compression**. Removing GPS leaves every other tag exactly as it was.
+- When you open a photo that contains a GPS location, you get a warning.
+
 **Edit**
 - **Move** (V): drag a layer, or just the selected pixels. Arrow keys nudge.
 - **Select** (M): rectangle and ellipse marquee with add, subtract and intersect. Also select all, invert, crop to selection, copy or cut to a new layer, fill, and delete. Painting, fills, adjustments and filters stay inside the selection.
@@ -139,6 +154,7 @@ npm i && CHROME=/path/to/chrome npm run test:e2e   # browser end-to-end scenario
 - `js/tools.js`: the crop, resize, adjust, filters, text, layers and other panels. Each tool is a factory that builds its panel and handles pointer input in image coordinates.
 - `js/paint.js`: the brush engine (stamped strokes with hardness and per-stroke opacity), pencil, eraser, shapes, paint bucket, gradient, eyedropper, selection, move and free transform. All pixel edits go through one function, which respects the selection and layer locks.
 - `js/menus.js`: the menu bar (the same menus open from a single button on phones).
+- `js/metadata.js`: dependency-free JPEG/PNG/WebP metadata parser and scrubber. It rebuilds EXIF tag by tag, recomputes PNG CRCs, and updates WebP's VP8X flags and RIFF size. `js/metadata-ui.js` is its dialog.
 - `js/psd.js`: PSD import/export with [ag-psd](https://github.com/Agamnentzar/ag-psd), loaded only when needed.
 - `js/bg-worker.js`: background removal in a Web Worker. It runs [U²-Net](https://github.com/xuebinqin/U-2-Net) models with [ONNX Runtime Web](https://onnxruntime.ai/), and the mask is upscaled and applied on a canvas.
 - `sw.js`: service worker for offline use.

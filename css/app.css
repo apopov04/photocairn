@@ -285,3 +285,26 @@ dialog input[type=number] { width: 100%; padding: 8px 10px; border: 1px solid va
 .color-well .bg { top: 22px; left: 16px; }
 .color-well .mini { right: 0; top: 0; }
 .color-well .reset { left: 0; bottom: 0; }
+
+/* Metadata dialog */
+dialog.wide { width: min(640px, calc(100vw - 24px)); max-height: calc(100dvh - 40px); padding: 16px 18px; }
+.md-head { display: flex; justify-content: space-between; align-items: center; }
+.md-head h2 { margin: 0; }
+dialog .x { border: 0; background: transparent; font-size: 22px; padding: 2px 8px; color: var(--muted); }
+dialog .meta { margin: 4px 0 10px; color: var(--muted); font-size: 13px; }
+dialog .note { color: var(--muted); font-size: 12px; margin: 6px 0; }
+.md-alert { background: color-mix(in srgb, #ff9500 14%, var(--surface)); border: 1px solid color-mix(in srgb, #ff9500 50%, var(--line)); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; }
+.md-presets { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.md-presets button { padding: 5px 10px; font-size: 13px; }
+.md-list { display: flex; flex-direction: column; gap: 6px; max-height: 50dvh; overflow-y: auto; }
+.md-group { border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.md-group.private summary b { color: var(--text); }
+.md-group summary { display: flex; align-items: center; gap: 8px; padding: 8px 10px; cursor: pointer; flex-wrap: wrap; }
+.md-group summary .md-hint { flex-basis: 100%; padding-left: 26px; font-size: 12px; color: var(--muted); }
+.md-row { display: grid; grid-template-columns: 18px minmax(110px, 38%) 1fr auto; gap: 8px; align-items: center; padding: 5px 10px 5px 10px; border-top: 1px solid var(--line); font-size: 13px; cursor: pointer; }
+.md-name { color: var(--muted); }
+.md-val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.md-thumb { height: 40px; border-radius: 4px; border: 1px solid var(--line); }
+.md-foot { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.meta-link { margin: 0; }
+button.link { border: 0; background: none; color: var(--accent); font-weight: 600; padding: 4px; text-decoration: underline; text-underline-offset: 3px; }

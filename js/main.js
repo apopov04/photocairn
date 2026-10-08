@@ -8,6 +8,7 @@ import * as T from "./tools.js";
 import * as P from "./paint.js";
 import * as PSD from "./psd.js";
 import { buildMenus } from "./menus.js";
+import { metadataDialog, hasGps } from "./metadata-ui.js";
 
 const $ = (s) => document.querySelector(s);
 const app = $("#app"), stageWrap = $("#stage-wrap"), panel = $("#panel");
@@ -183,7 +184,10 @@ async function openBlob(blob, name = "image") {
   x.imageSmoothingQuality = "high";
   x.drawImage(src, 0, 0, w, hgt);
   src.close?.();
-  setDoc(new Doc(c, baseName(name)));
+  const d = new Doc(c, baseName(name));
+  d.sourceFile = blob instanceof File ? blob : new File([blob], name, { type: blob.type });
+  setDoc(d);
+  if (await hasGps(blob)) toast("This photo contains its GPS location. See File › Metadata. Saved copies never include it.", 5500);
 }
 
 function setDoc(d) {
@@ -654,6 +658,13 @@ async function copyToClipboard(cut = false) {
   } catch { toast("Your browser didn't allow clipboard access."); }
 }
 
+function openMetadata() {
+  const f = doc?.sourceFile;
+  if (f) metadataDialog({ file: f, toast });
+  else metadataDialog({ toast });
+}
+$("#btn-meta").onclick = () => metadataDialog({ toast });
+
 function openCanvasSize() {
   selectTool("resize");
   panel.querySelector('.seg [data-v="canvas"]')?.click();
@@ -693,6 +704,8 @@ buildMenus($("#menus"), $("#btn-menu"), [
     { label: "Place image as layer…", action: () => A.pickLayerImage(), enabled: has },
     "-",
     { label: "Save / Export…", shortcut: "Ctrl+S", action: () => selectTool("export"), enabled: has },
+    "-",
+    { label: "Metadata: view & remove…", action: openMetadata },
   ] },
   { label: "Edit", items: [
     { label: "Undo", shortcut: "Ctrl+Z", action: () => doc.undo(), enabled: () => !!doc?.canUndo },
