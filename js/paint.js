@@ -780,16 +780,22 @@ function moved(lifted, dx, dy) {
 
 const visiblePart = (A, ext) => layerFromExtent(ext, A.doc.width, A.doc.height).canvas;
 
-function commitExtent(A, ext) {
+function commitExtent(A, ext, meta = {}) {
   const { canvas, over } = layerFromExtent(ext, A.doc.width, A.doc.height);
-  A.doc.commit(canvas, {}, { over });
+  A.doc.commit(canvas, meta, { over });
+}
+
+/** Moving a whole text layer keeps it editable: its text box moves along. */
+function movedMeta(A, dx, dy) {
+  const t = A.doc.meta.text;
+  return t && !A.doc.selection ? { text: { ...t, x: t.x + dx, y: t.y + dy } } : {};
 }
 
 export function moveTool(A) {
   let drag = null;
   const nudge = (dx, dy) => {
     if (!guard(A, "position")) return;
-    commitExtent(A, moved(liftSelection(A), dx, dy));
+    commitExtent(A, moved(liftSelection(A), dx, dy), movedMeta(A, dx, dy));
     shiftSelection(A, dx, dy);
   };
   return {
@@ -813,7 +819,7 @@ export function moveTool(A) {
       if (!drag) return;
       const { lifted, dx, dy } = drag; drag = null;
       A.setSource(null);
-      if (dx || dy) { commitExtent(A, moved(lifted, dx, dy)); shiftSelection(A, dx, dy); }
+      if (dx || dy) { commitExtent(A, moved(lifted, dx, dy), movedMeta(A, dx, dy)); shiftSelection(A, dx, dy); }
     },
     keydown(e) {
       const k = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
@@ -834,7 +840,7 @@ function alignLayer(A) {
   const bx = b.x - lifted.ext.x, by = b.y - lifted.ext.y; // in document coordinates
   const dx = Math.round((A.doc.width - b.w) / 2 - bx), dy = Math.round((A.doc.height - b.h) / 2 - by);
   if (!dx && !dy) return;
-  commitExtent(A, moved(lifted, dx, dy));
+  commitExtent(A, moved(lifted, dx, dy), movedMeta(A, dx, dy));
   shiftSelection(A, dx, dy);
 }
 

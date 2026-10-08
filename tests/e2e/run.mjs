@@ -4,7 +4,9 @@
 // Each line of a scenario file is a step: tool:<name>, clicktext:<label>,
 // drag:x1:y1:x2:y2 (fractions of the canvas), tap:x:y, path:x1:y1:x2:y2:..., range:<index>:<value>,
 // waitfor:<js expr>, eval:<js expr>, key:<combo>, shot:<name>, wait:<ms>,
-// addlayer:<image path>, openfile:<path>, select:<css>:<value>, menu:<Menu>:<Item>.
+// addlayer:<image path>, openfile:<path>, select:<css>:<value>, menu:<Menu>:<Item>,
+// dragimg:<js expr giving [x1, y1, x2, y2] in image pixels> (e.g. to grab a handle).
+// dblclickimg:<js expr giving [x, y] in image pixels>.
 // Set URL= to test a deployed copy.
 // Needs `npm i -D puppeteer-core`.
 import puppeteer from "puppeteer-core";
@@ -61,6 +63,16 @@ for (const s of steps) { console.error("step", s);
     await page.mouse.move(r.x + r.w * x1, r.y + r.h * y1); await page.mouse.down();
     for (let i = 1; i <= 8; i++) await page.mouse.move(r.x + r.w * (x1 + (x2 - x1) * i / 8), r.y + r.h * (y1 + (y2 - y1) * i / 8));
     await page.mouse.up();
+  }
+  else if (name === "dragimg" || name === "dblclickimg") {
+    const pts = await page.evaluate(new Function(`const v = __photocairn.view, r = document.querySelector("#stage-wrap").getBoundingClientRect(), q = (${args.join(":")});
+      const out = []; for (let i = 0; i < q.length; i += 2) { const s = v.toScreen(q[i], q[i + 1]); out.push([r.x + s.x, r.y + s.y]); } return out;`));
+    if (name === "dblclickimg") await page.mouse.click(...pts[0], { count: 2 });
+    else {
+      await page.mouse.move(...pts[0]); await page.mouse.down();
+      for (let i = 1; i <= 8; i++) await page.mouse.move(pts[0][0] + (pts[1][0] - pts[0][0]) * i / 8, pts[0][1] + (pts[1][1] - pts[0][1]) * i / 8);
+      await page.mouse.up();
+    }
   }
   else if (name === "tap" || name === "path") { // tap:x:y clicks; path:x1:y1:x2:y2:... drags through points
     const r = await page.$eval("#stage-wrap", (e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; });

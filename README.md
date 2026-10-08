@@ -56,7 +56,7 @@ On phones, the tools sit along the bottom and the options and layers share a tab
 - **Gradient** (G): linear or radial, fading to the second color or to transparent.
 - **Eyedropper** (I): average 1, 3×3 or 5×5 pixels.
 - **Shapes** (U): line, arrow, rectangle, ellipse (outlined or filled) and highlighter.
-- **Text** (T): font, size, weight, italic, alignment, color, outline and background box. Each text goes on its own layer.
+- **Text** (T): click to place text or drag to draw a text box, then drag to move it and drag the side handles to set the wrapping width. Font, font size, weight, italic, alignment, color, outline and background color. Each text is an editable text layer: click it with the Text tool (or double-click it) to change it later. Painting or filtering a text layer turns it into pixels.
 - Main and second colors in the toolbar. X swaps them, D resets to black and white. Alt+click with the brush picks a color.
 
 **Layers**
@@ -152,6 +152,7 @@ npm i && CHROME=/path/to/chrome npm run test:e2e   # browser end-to-end scenario
 - `js/ops.js`: pure pixel operations (adjustments, filters, blur, sharpen, pixelate, mask handling). They don't touch the DOM, so they're unit-tested in Node.
 - `js/editor.js`: the document model (layers plus memory-capped undo history) and the zoomable viewport. Layers are immutable snapshots, so undo stores references instead of pixel copies.
 - `js/tools.js`: the crop, resize, adjust, filters, text, layers and other panels. Each tool is a factory that builds its panel and handles pointer input in image coordinates.
+- `js/text.js`: text layers. A text layer keeps its text, font, size, colors and box in `layer.meta.text` and is re-rendered from them, so it stays editable (word wrapping is unit-tested in Node).
 - `js/paint.js`: the brush engine (stamped strokes with hardness and per-stroke opacity), pencil, eraser, shapes, paint bucket, gradient, eyedropper, selection, move and free transform. All pixel edits go through one function, which respects the selection and layer locks.
 - `js/menus.js`: the menu bar (the same menus open from a single button on phones).
 - `js/metadata.js`: dependency-free JPEG/PNG/WebP metadata parser and scrubber. It rebuilds EXIF tag by tag, recomputes PNG CRCs, and updates WebP's VP8X flags and RIFF size. `js/metadata-ui.js` is its dialog.
