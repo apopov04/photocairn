@@ -570,14 +570,14 @@ export function selectionBounds(A) {
 export function clearSelection(A) {
   if (!A.doc.selection) return A.toast("Select an area first (or use Layers › Clear to empty the layer).");
   if (!guard(A)) return;
-  A.doc.commit(applyPaint(A, A.doc.canvas, A.doc.selection.mask, { erase: true }), {});
+  A.doc.label("Delete selection").commit(applyPaint(A, A.doc.canvas, A.doc.selection.mask, { erase: true }), {});
 }
 
 export function fillSelection(A) {
   if (!guard(A)) return;
   const d = A.doc, paint = makeCanvas(d.width, d.height), x = paint.getContext("2d");
   x.fillStyle = A.colors.fg; x.fillRect(0, 0, d.width, d.height);
-  d.commit(applyPaint(A, d.canvas, paint), {});
+  d.label("Fill").commit(applyPaint(A, d.canvas, paint), {});
 }
 
 /** Copy (or cut) the selection to a new layer. */
@@ -587,7 +587,7 @@ export function selectionToLayer(A, cut = false, makeLayer) {
   const piece = copyCanvas(d.canvas), x = piece.getContext("2d");
   x.globalCompositeOperation = "destination-in"; x.drawImage(d.selection.mask, 0, 0);
   if (cut && !guard(A)) return;
-  d.change((doc) => {
+  d.label(cut ? "Layer via cut" : "Layer via copy").change((doc) => {
     if (cut) doc.layers[doc.active] = { ...doc.layer, canvas: applyPaint(A, doc.canvas, doc.selection.mask, { erase: true }), meta: {} };
     doc.layers.splice(doc.active + 1, 0, makeLayer(piece, `${doc.layer.name} ${cut ? "cut" : "copy"}`));
     doc.active += 1;
@@ -597,7 +597,7 @@ export function selectionToLayer(A, cut = false, makeLayer) {
 export function cropToSelection(A) {
   const b = selectionBounds(A);
   if (!b) return A.toast("Select an area first.");
-  A.doc.commitAll((c) => {
+  A.doc.label("Crop to selection").commitAll((c) => {
     const out = makeCanvas(b.w, b.h);
     out.getContext("2d").drawImage(c, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);
     return out;

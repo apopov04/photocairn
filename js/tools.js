@@ -1226,11 +1226,11 @@ export function layerOps(A) {
     return c;
   };
   return {
-    addBlank: () => A.doc.change((d) => {
+    addBlank: () => A.doc.label("New layer").change((d) => {
       d.layers.splice(d.active + 1, 0, makeLayer(makeCanvas(d.width, d.height), `Layer ${d.layers.length + 1}`));
       d.active += 1;
     }),
-    duplicate: () => A.doc.change((d) => {
+    duplicate: () => A.doc.label("Duplicate layer").change((d) => {
       const l = d.layer;
       d.layers.splice(d.active + 1, 0, makeLayer(copyCanvas(l.canvas), `${l.name} copy`, { opacity: l.opacity, blend: l.blend, visible: l.visible, over: l.over, meta: l.meta.text ? { text: l.meta.text } : {} }));
       d.active += 1;
@@ -1238,20 +1238,20 @@ export function layerOps(A) {
     remove: () => {
       if (!A.doc.hasLayers) return A.toast("An image needs at least one layer.");
       if (lockedAll()) return;
-      A.doc.change((d) => { d.layers.splice(d.active, 1); d.active = Math.min(d.active, d.layers.length - 1); });
+      A.doc.label("Delete layer").change((d) => { d.layers.splice(d.active, 1); d.active = Math.min(d.active, d.layers.length - 1); });
     },
-    clear: () => { if (guard(A)) A.doc.commit(makeCanvas(A.doc.width, A.doc.height), {}, { over: null }); },
+    clear: () => { if (guard(A)) A.doc.label("Clear layer").commit(makeCanvas(A.doc.width, A.doc.height), {}, { over: null }); },
     moveBy: (dir) => {
       const d = A.doc, j = d.active + dir;
       if (j < 0 || j >= d.layers.length) return;
-      d.change((d) => { [d.layers[d.active], d.layers[j]] = [d.layers[j], d.layers[d.active]]; d.active = j; });
+      d.label(dir > 0 ? "Move layer up" : "Move layer down").change((d) => { [d.layers[d.active], d.layers[j]] = [d.layers[j], d.layers[d.active]]; d.active = j; });
     },
     mergeDown: () => {
       const d = A.doc;
       if (d.active === 0) return A.toast("There's no layer below to merge into.");
       const below = d.layers[d.active - 1];
       if (below.lock?.all || below.lock?.pixels) return A.toast(`"${below.name}" is locked.`);
-      d.change((d) => {
+      d.label("Merge down").change((d) => {
         const top = d.layers[d.active], below = d.layers[d.active - 1];
         const c = copyCanvas(below.canvas), x = c.getContext("2d");
         if (top.visible) { x.globalAlpha = top.opacity; x.globalCompositeOperation = top.blend; x.drawImage(top.canvas, 0, 0); }
@@ -1262,7 +1262,7 @@ export function layerOps(A) {
     mergeVisible: () => {
       const d = A.doc;
       if (d.layers.filter((l) => l.visible).length < 2) return A.toast("Need at least two visible layers.");
-      d.change((d) => {
+      d.label("Merge visible").change((d) => {
         const merged = makeLayer(flatInto(d.layers), "Merged");
         const firstVis = d.layers.findIndex((l) => l.visible);
         d.layers = d.layers.filter((l, i) => !l.visible || i === firstVis).map((l) => (l.visible ? merged : l));
@@ -1271,7 +1271,7 @@ export function layerOps(A) {
     },
     flatten: () => {
       if (!A.doc.hasLayers) return A.toast("There's only one layer.");
-      A.doc.change((d) => { d.layers = [makeLayer(copyCanvas(d.composite()), "Background")]; d.active = 0; });
+      A.doc.label("Flatten image").change((d) => { d.layers = [makeLayer(copyCanvas(d.composite()), "Background")]; d.active = 0; });
     },
   };
 }
