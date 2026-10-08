@@ -4,7 +4,7 @@
 
 import * as ops from "./ops.js";
 import { makeCanvas, ctx2d, copyCanvas, getImageData, canvasFromImageData, resizeCanvas, makeLayer, BLEND_MODES } from "./editor.js";
-import { h, slider, seg, swatches, progress, nextFrame } from "./ui.js";
+import { h, slider, numField, seg, swatches, progress, nextFrame } from "./ui.js";
 import { guard, withinSelection } from "./paint.js";
 import { renderText, measureText, textBox, textLayerAt, layerName } from "./text.js";
 export { textLayerAt };
@@ -1143,8 +1143,8 @@ export function layersPanel(A) {
   const el = h("div", { class: "layers-panel" });
   const list = h("ol", { class: "layers", "aria-label": "Layers (top first)" });
   const opacity = h("input", { type: "range", min: 0, max: 100, value: 100, "aria-label": "Layer opacity" });
-  const opOut = h("output", {}, "100%");
-  opacity.addEventListener("input", () => { opOut.textContent = `${opacity.value}%`; liveProp({ opacity: opacity.value / 100 }); });
+  const opOut = numField(opacity, { unit: "%", label: "Layer opacity" });
+  opacity.addEventListener("input", () => liveProp({ opacity: opacity.value / 100 }));
   opacity.addEventListener("change", () => endLive());
   const blend = h("select", { "aria-label": "Blend mode", title: "Blend mode" }, BLEND_MODES.map(([v, label]) => h("option", { value: v }, label)));
   blend.onchange = () => { if (notAllLocked()) A.doc.setLayerProps(A.doc.active, { blend: blend.value }); else blend.value = A.doc.layer.blend; };
@@ -1192,7 +1192,7 @@ export function layersPanel(A) {
       }, eye, thumb(l, d.width, d.height), h("span", { class: "linfo" }, name, sub), locked ? h("span", { class: "lock-ico", title: "Locked", html: LOCK_ICONS.all }) : null);
       list.append(li);
     }
-    opacity.value = Math.round(d.layer.opacity * 100); opOut.textContent = `${opacity.value}%`;
+    opacity.value = Math.round(d.layer.opacity * 100); if (document.activeElement !== opOut.field) opOut.sync();
     blend.value = d.layer.blend;
     const lock = d.layer.lock || {};
     lockRow.replaceChildren(h("span", { class: "lock-label" }, "Lock:"), ...LOCKS.map(([key, label, title]) =>

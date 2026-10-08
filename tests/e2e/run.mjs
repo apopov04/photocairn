@@ -3,7 +3,7 @@
 //   CHROME=/path/to/chrome node tests/e2e/run.mjs tests/e2e/tools.txt
 // Each line of a scenario file is a step: tool:<name>, clicktext:<label>,
 // drag:x1:y1:x2:y2 (fractions of the canvas), tap:x:y, path:x1:y1:x2:y2:..., range:<index>:<value>,
-// waitfor:<js expr>, eval:<js expr>, key:<combo>, shot:<name>, wait:<ms>,
+// waitfor:<js expr>, eval:<js expr>, type:<css>:<text>, key:<combo>, shot:<name>, wait:<ms>,
 // addlayer:<image path>, openfile:<path>, select:<css>:<value>, menu:<Menu>:<Item>,
 // dragimg:<js expr giving [x1, y1, x2, y2] in image pixels> (e.g. to grab a handle).
 // dblclickimg:<js expr giving [x, y] in image pixels>.
@@ -57,6 +57,11 @@ for (const s of steps) { console.error("step", s);
   else if (name === "wait") { await new Promise((r) => setTimeout(r, +args[0])); }
   else if (name === "waitfor") { await page.waitForFunction(new Function(`return ${args.join(":")}`), { timeout: 200000, polling: 500 }); }
   else if (name === "range") { await page.evaluate((i, v) => { const r = document.querySelectorAll("#side input[type=range]")[+i]; r.value = v; r.dispatchEvent(new Event("input")); r.dispatchEvent(new Event("change")); }, args[0], args[1]); }
+  else if (name === "type") { // type:<css>:<text> focuses a field, replaces its text by typing (add key:Enter to commit)
+    const text = args.pop(), sel = args.join(":");
+    await page.evaluate((q) => { const e = document.querySelector(q); e.focus(); e.select?.(); }, sel);
+    await page.keyboard.press("Backspace"); await page.keyboard.type(text);
+  }
   else if (name === "drag") { // drag:x1:y1:x2:y2 in fractions of the stage
     const r = await page.$eval("#stage-wrap", (e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; });
     const [x1, y1, x2, y2] = args.map(Number);

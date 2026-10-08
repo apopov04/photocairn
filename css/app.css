@@ -319,3 +319,13 @@ button.link { border: 0; background: none; color: var(--accent); font-weight: 60
 .panel .field { display: flex; flex-direction: column; gap: 6px; font-weight: 550; font-size: 13px; }
 .panel .num { display: inline-flex; align-items: center; gap: 4px; font-weight: 450; color: var(--muted); }
 .panel .num input[type="number"] { width: 72px; padding: 3px 6px; border-radius: 8px; color: var(--text); }
+/* Exact-value field next to every slider (ui.js numField) */
+.panel .lab { align-items: center; gap: 8px; min-height: 24px; }
+.panel .num input.numf[type="number"] { width: 54px; padding: 2px 6px; border-radius: 7px; font: inherit; font-size: 12px; font-weight: 450; text-align: right; font-variant-numeric: tabular-nums; -moz-appearance: textfield; appearance: textfield; }
+.panel .num input.numf::-webkit-inner-spin-button, .panel .num input.numf::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.panel .num input.numf:focus { border-color: var(--accent); outline: none; }
+.layer-props .op { flex: 2; }
+.layer-props .op .num { flex: none; font-size: 12px; }
+.layer-props .op .num input.numf[type="number"] { flex: none; width: 44px; min-width: 0; padding: 2px 4px; }
+/* iOS zooms the page into inputs under 16px; keep the fields at 16px on touch screens. */
+@media (pointer: coarse) { .panel .num input.numf[type="number"] { font-size: 16px; width: 60px; padding: 2px 5px; } .layer-props .op .num input.numf[type="number"] { width: 50px; } }
