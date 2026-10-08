@@ -290,19 +290,23 @@ const FACTORIES = {
   looks: T.looksTool, redact: T.redactTool, text: T.textTool, frame: T.frameTool,
   layers: T.layersTool, rotate: T.rotateTool,
   move: P.moveTool, select: (a) => P.selectTool(a, makeLayer), transform: P.transformTool,
-  brush: (a) => P.paintTool(a, "brush"), pencil: (a) => P.paintTool(a, "pencil"), eraser: (a) => P.paintTool(a, "eraser"),
+  paint: (a) => P.paintTool(a, brushVariant, selectTool), eraser: (a) => P.paintTool(a, "eraser"),
   shapes: P.shapesTool, fill: P.fillTool, gradient: P.gradientTool, eyedropper: P.eyedropperTool,
   export: exportTool,
 };
 
 // Rail tools stay selected (like Photoshop); "panel" tools opened from the
 // menus (Adjust, Resize...) return to the previous rail tool when closed.
-const RAIL_TOOLS = new Set(["move", "select", "crop", "cutout", "brush", "pencil", "eraser", "fill", "gradient", "eyedropper", "shapes", "text", "redact"]);
+const RAIL_TOOLS = new Set(["move", "select", "crop", "cutout", "paint", "eraser", "fill", "gradient", "eyedropper", "shapes", "text", "redact"]);
 let railTool = "move";
 
 function selectTool(name, toggle = false) {
   if (!doc) return;
   if (!name) name = railTool;
+  if (BRUSH_KEYS.includes(name)) { // a variant of the brush group
+    if (name !== brushVariant) { setBrushVariant(name); toggle = true; }
+    name = "paint";
+  }
   if (name === toolName && !toggle) { showTab("props"); return; }
   if (tool) { tool.cleanup?.(); }
   preview = null;
@@ -328,7 +332,7 @@ function selectTool(name, toggle = false) {
 }
 
 // Tools that edit only the selected layer (others act on the whole image).
-const LAYER_TOOLS = new Set(["cutout", "adjust", "looks", "redact", "move", "transform", "brush", "pencil", "eraser", "shapes", "fill", "gradient"]);
+const LAYER_TOOLS = new Set(["cutout", "adjust", "looks", "redact", "move", "transform", "paint", "eraser", "shapes", "fill", "gradient"]);
 let layerNote = null;
 function updateLayerNote() {
   if (!layerNote || !doc) return;
@@ -343,8 +347,76 @@ function markTool() {
 
 $("#tools").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-tool]");
+  if (longPressed) { longPressed = false; return; }
   if (b && doc) selectTool(b.dataset.tool);
 });
+
+/* ------------------- brush group: brush, pencil, pen, highlighter ------------------- */
+
+const BRUSH_KEYS = P.BRUSHES.map((b) => b.value);
+const BRUSH_ICONS = {
+  brush: '<path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L11 15.8 8.2 13z"/><path d="M7 14c-2 0-3 1.5-3 3 0 1.2-.8 2.2-2 3 3 1 7 .5 8-3z"/>',
+  pencil: '<path d="M15 4l5 5L9 20H4v-5z"/><path d="M13 6l5 5"/>',
+  pen: '<path d="M20 4c-5 0-9 2-11 6l-5 10 10-5c4-2 6-6 6-11z"/><path d="M4 20l6.5-6.5"/><circle cx="12" cy="12" r="1.5"/>',
+  highlighter: '<path d="M15 3l6 6-8 8-6-6z"/><path d="M7 11l-2 5 3 3 5-2"/><path d="M5 16l-2.5 2.5L4 20h4"/><path d="M14 21h7" opacity=".5"/>',
+};
+let brushVariant = BRUSH_KEYS.includes(localStorage.getItem("pc-brush-tool")) ? localStorage.getItem("pc-brush-tool") : "brush";
+const paintBtn = $('#tools button[data-tool="paint"]');
+const brushInfo = (v) => P.BRUSHES.find((b) => b.value === v);
+function setBrushVariant(v) {
+  brushVariant = v;
+  localStorage.setItem("pc-brush-tool", v);
+  const b = brushInfo(v);
+  paintBtn.innerHTML = `<svg viewBox="0 0 24 24">${BRUSH_ICONS[v]}</svg><span>${b.label}</span>`;
+  paintBtn.title = `${b.label} (${b.key || "B"}). Right-click or long-press for more`;
+  paintBtn.setAttribute("aria-label", b.label);
+}
+setBrushVariant(brushVariant);
+const nextBrush = () => BRUSH_KEYS[(BRUSH_KEYS.indexOf(brushVariant) + 1) % BRUSH_KEYS.length];
+
+// Flyout menu to swap variants: right-click, or long-press on touch.
+let flyout = null, longPressed = false, pressTimer = 0;
+function closeFlyout() { flyout?.remove(); flyout = null; }
+function openFlyout() {
+  if (!doc) return;
+  closeFlyout();
+  flyout = h("ul", { class: "menu-pop tool-flyout", role: "menu", "aria-label": "Brush tools" }, P.BRUSHES.map((b) => h("li", {},
+    h("button", {
+      role: "menuitemradio", "aria-checked": String(b.value === brushVariant), class: b.value === brushVariant ? "on" : null,
+      onclick: () => { closeFlyout(); selectTool(b.value); },
+    }, h("span", { html: `<svg viewBox="0 0 24 24">${BRUSH_ICONS[b.value]}</svg>` }, b.label), b.key ? h("kbd", {}, b.key) : null))));
+  document.body.append(flyout);
+  // Beside the button (left rail), or above it when that doesn't fit (bottom rail on phones).
+  const r = paintBtn.getBoundingClientRect(), fw = flyout.offsetWidth, fh = flyout.offsetHeight;
+  let left = r.right + 4, top = r.top;
+  if (top + fh > innerHeight - 4) { left = r.left; top = r.top - fh - 4; }
+  flyout.style.left = `${Math.max(4, Math.min(left, innerWidth - fw - 4))}px`;
+  flyout.style.top = `${Math.max(4, top)}px`;
+}
+paintBtn.addEventListener("contextmenu", (e) => { e.preventDefault(); if (!flyout) openFlyout(); });
+paintBtn.addEventListener("pointerdown", (e) => {
+  if (e.button) return;
+  longPressed = false;
+  const x0 = e.clientX, y0 = e.clientY;
+  pressTimer = setTimeout(() => { longPressed = true; openFlyout(); }, 450);
+  const cancel = (ev) => {
+    if (ev.type === "pointermove" && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 10) return;
+    clearTimeout(pressTimer);
+    for (const t of ["pointermove", "pointerup", "pointercancel"]) paintBtn.removeEventListener(t, cancel);
+  };
+  for (const t of ["pointermove", "pointerup", "pointercancel"]) paintBtn.addEventListener(t, cancel);
+});
+addEventListener("pointerdown", (e) => { if (flyout && !flyout.contains(e.target)) closeFlyout(); }, true);
+addEventListener("keydown", (e) => {
+  if (!flyout) return;
+  if (e.key === "Escape") { e.stopPropagation(); closeFlyout(); paintBtn.focus(); return; }
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  e.preventDefault(); e.stopPropagation();
+  const items = [...flyout.querySelectorAll("button")], i = items.indexOf(document.activeElement);
+  items[(i + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus();
+}, true);
+addEventListener("resize", closeFlyout);
+$("#tools").addEventListener("scroll", closeFlyout);
 
 /* ------------------------------- right sidebar ------------------------------- */
 
@@ -503,7 +575,9 @@ addEventListener("keydown", (e) => {
   if (mod && k === "t") { e.preventDefault(); selectTool("transform", false); return; }
   if ((e.key === "Delete" || e.key === "Backspace") && !mod) { e.preventDefault(); P.clearSelection(A); return; }
   if (!mod && !e.altKey) {
-    const shortcut = { v: "move", m: "select", b: "brush", n: "pencil", e: "eraser", i: "eyedropper", k: "fill", g: "gradient", u: "shapes", t: "text", c: "crop" }[k];
+    // B selects the brush group; B again (or Shift+B) cycles through its variants.
+    if (k === "b") { selectTool(toolName === "paint" || e.shiftKey ? nextBrush() : "paint", false); return; }
+    const shortcut = { v: "move", m: "select", n: "pencil", e: "eraser", i: "eyedropper", k: "fill", g: "gradient", u: "shapes", t: "text", c: "crop" }[k];
     if (shortcut) { selectTool(shortcut, false); return; }
     if (k === "w") { // magic wand
       localStorage.setItem("pc-sel", "wand");
@@ -677,7 +751,7 @@ function openCanvasSize() {
 
 function shortcutsDialog() {
   const rows = [
-    ["Move / Select / Crop", "V / M / C"], ["Magic wand", "W"], ["Brush / Pencil / Eraser", "B / N / E"], ["Bucket / Gradient / Eyedropper", "K / G / I"],
+    ["Move / Select / Crop", "V / M / C"], ["Magic wand", "W"], ["Brush tools / Pencil / Eraser", "B / N / E"], ["Next brush tool (Pen, Highlighter…)", "B again / Shift+B"], ["Bucket / Gradient / Eyedropper", "K / G / I"],
     ["Shapes / Text", "U / T"], ["Free transform", "Ctrl+T"], ["Swap / reset colors", "X / D"], ["Brush size", "[ / ]"],
     ["Select all / Deselect / Invert", "Ctrl+A / Ctrl+D / Ctrl+Shift+I"], ["Copy / Cut / Paste", "Ctrl+C / Ctrl+X / Ctrl+V"],
     ["Selection to new layer", "Ctrl+J"], ["New layer / Merge down", "Ctrl+Shift+N / Ctrl+E"], ["Delete selected pixels", "Delete"],

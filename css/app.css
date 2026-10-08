@@ -220,6 +220,14 @@ dialog input[type=number] { width: 100%; padding: 8px 10px; border: 1px solid va
 .tools button span { display: none; }
 .tools button svg { width: 20px; height: 20px; }
 .tools .tsep { width: 26px; height: 1px; background: var(--line); margin: 4px 0; flex: none; }
+/* Tool groups (several tools on one button): corner mark, right-click or long-press flyout */
+.tools button { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.tools button.group { position: relative; }
+.tools button.group::after { content: ""; position: absolute; right: 3px; bottom: 3px; border: 3px solid transparent; border-right-color: currentColor; border-bottom-color: currentColor; opacity: .55; }
+.menu-pop.tool-flyout { min-width: 180px; }
+.tool-flyout button > span { display: flex; align-items: center; gap: 9px; }
+.tool-flyout svg { width: 18px; height: 18px; }
+.tool-flyout button.on:not(:hover):not(:focus-visible) { color: var(--accent); }
 .color-well { width: 42px; height: 50px; margin: 10px 0 4px; flex: none; }
 .color-well .well { width: 24px; height: 24px; border-radius: 5px; }
 .color-well .fg { left: 0; top: 0; }

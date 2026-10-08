@@ -49,13 +49,16 @@ On phones, the tools sit along the bottom and the options and layers share a tab
 - **Resize**: image size (scale), plus **canvas size** with an anchor to add space around the image without scaling it.
 
 **Paint**
-- **Brush** (B): size, hardness, opacity and color.
-- **Pencil** (N): hard, pixel-exact lines.
+- **Brush tools** (B) share one toolbar button; switch type in the tool options, by right-clicking (or long-pressing) the button, or with B / Shift+B:
+  - **Brush**: size, hardness, opacity and color.
+  - **Pencil** (N): hard, pixel-exact lines.
+  - **Pen**: smooth, steadied ink lines for writing and signatures.
+  - **Highlighter**: flat, see-through chisel tip that darkens what is under it.
 - **Eraser** (E): soft or block.
 - **Paint bucket** (K): tolerance, contiguous or global fill, and sample one layer or all layers.
 - **Gradient** (G): linear or radial, fading to the second color or to transparent.
 - **Eyedropper** (I): average 1, 3×3 or 5×5 pixels.
-- **Shapes** (U): line, arrow, rectangle, ellipse (outlined or filled) and highlighter.
+- **Shapes** (U): line, arrow, rectangle, ellipse (outlined or filled).
 - **Text** (T): font, size, weight, italic, alignment, color, outline and background box. Each text goes on its own layer.
 - Main and second colors in the toolbar. X swaps them, D resets to black and white. Alt+click with the brush picks a color.
 
@@ -90,7 +93,7 @@ On phones, the tools sit along the bottom and the options and layers share a tab
 - `M`: Select
 - `Ctrl+T`: Transform
 - `C`: Crop
-- `B`: Brush
+- `B`: Brush tools (press again, or `Shift+B`, for Pencil, Pen, Highlighter)
 - `N`: Pencil
 - `E`: Eraser
 - `K`: Paint bucket
@@ -152,7 +155,7 @@ npm i && CHROME=/path/to/chrome npm run test:e2e   # browser end-to-end scenario
 - `js/ops.js`: pure pixel operations (adjustments, filters, blur, sharpen, pixelate, mask handling). They don't touch the DOM, so they're unit-tested in Node.
 - `js/editor.js`: the document model (layers plus memory-capped undo history) and the zoomable viewport. Layers are immutable snapshots, so undo stores references instead of pixel copies.
 - `js/tools.js`: the crop, resize, adjust, filters, text, layers and other panels. Each tool is a factory that builds its panel and handles pointer input in image coordinates.
-- `js/paint.js`: the brush engine (stamped strokes with hardness and per-stroke opacity), pencil, eraser, shapes, paint bucket, gradient, eyedropper, selection, move and free transform. All pixel edits go through one function, which respects the selection and layer locks.
+- `js/paint.js`: the brush engine (stamped strokes with hardness and per-stroke opacity) and its variants (brush, pencil, pen, highlighter), eraser, shapes, paint bucket, gradient, eyedropper, selection, move and free transform. All pixel edits go through one function, which respects the selection and layer locks.
 - `js/menus.js`: the menu bar (the same menus open from a single button on phones).
 - `js/metadata.js`: dependency-free JPEG/PNG/WebP metadata parser and scrubber. It rebuilds EXIF tag by tag, recomputes PNG CRCs, and updates WebP's VP8X flags and RIFF size. `js/metadata-ui.js` is its dialog.
 - `js/psd.js`: PSD import/export with [ag-psd](https://github.com/Agamnentzar/ag-psd), loaded only when needed.

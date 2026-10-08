@@ -1,4 +1,5 @@
-// Painting and selection tools: brush, pencil, eraser, shapes, paint bucket,
+// Painting and selection tools: brush group (brush, pencil, pen, highlighter),
+// eraser, shapes, paint bucket,
 // gradient, eyedropper, selection (marquee, lasso, magic wand), move and
 // free transform.
 //
@@ -38,7 +39,7 @@ function clipToSelection(A, paint) {
  * Composite a paint layer (strokes, fills...) onto `base` (the active layer).
  * erase=true removes pixels instead. Respects selection and alpha lock.
  */
-export function applyPaint(A, base, paint, { opacity = 1, erase = false } = {}) {
+export function applyPaint(A, base, paint, { opacity = 1, erase = false, blend = "source-over" } = {}) {
   let p = clipToSelection(A, paint);
   const lockAlpha = A.doc.layer.lock?.alpha;
   const out = copyCanvas(base), x = out.getContext("2d");
@@ -50,7 +51,7 @@ export function applyPaint(A, base, paint, { opacity = 1, erase = false } = {}) 
     p = bg;
     x.globalCompositeOperation = "source-atop";
   } else {
-    x.globalCompositeOperation = erase ? "destination-out" : lockAlpha ? "source-atop" : "source-over";
+    x.globalCompositeOperation = erase ? "destination-out" : lockAlpha ? "source-atop" : blend;
   }
   x.drawImage(p, 0, 0);
   return out;
@@ -80,14 +81,15 @@ function colorRow(A, which = "fg") {
   return sw;
 }
 
-function brushCursor(ctx, view, p, r, square = false) {
+/** Brush outline: a circle of radius r, or a rectangle (half-width r, half-height ry). */
+function brushCursor(ctx, view, p, r, square = false, ry = r) {
   if (!p) return;
-  const s = view.toScreen(p.x, p.y), R = Math.max(1.5, r * view.zoom);
+  const s = view.toScreen(p.x, p.y), R = Math.max(1.5, r * view.zoom), RY = Math.max(1.5, ry * view.zoom);
   ctx.lineWidth = 1.5;
   for (const [color, off] of [["rgba(0,0,0,.6)", 1], ["rgba(255,255,255,.95)", 0]]) {
     ctx.strokeStyle = color;
     ctx.beginPath();
-    if (square) ctx.rect(s.x - R - off, s.y - R - off, (R + off) * 2, (R + off) * 2);
+    if (square) ctx.rect(s.x - R - off, s.y - RY - off, (R + off) * 2, (RY + off) * 2);
     else ctx.arc(s.x, s.y, R + off, 0, Math.PI * 2);
     ctx.stroke();
   }
@@ -104,11 +106,16 @@ function frameThrottle(fn) {
 
 /* ------------------------------ brush engine ------------------------------ */
 
-function makeStamp(size, hardness, color) {
+const CHISEL = 0.35; // highlighter tip: width as a fraction of its height
+
+function makeStamp(size, hardness, color, chisel = false) {
   const r = size / 2, dim = Math.ceil(size) + 2;
   const c = makeCanvas(dim, dim), x = c.getContext("2d");
   const cx = dim / 2;
-  if (hardness >= 0.99) {
+  if (chisel) {
+    const w = Math.max(1, size * CHISEL);
+    x.fillStyle = color; x.fillRect(cx - w / 2, cx - r, w, size);
+  } else if (hardness >= 0.99) {
     x.fillStyle = color; x.beginPath(); x.arc(cx, cx, r, 0, Math.PI * 2); x.fill();
   } else {
     const [R, G, B] = ops.hexToRgb(color);
@@ -123,12 +130,12 @@ function makeStamp(size, hardness, color) {
 
 /** Accumulates one stroke into its own canvas (so opacity applies once per stroke). */
 class Stroke {
-  constructor(w, hgt, { size, hardness = 1, color = "#000", pixel = false }) {
+  constructor(w, hgt, { size, hardness = 1, color = "#000", pixel = false, chisel = false }) {
     this.canvas = makeCanvas(w, hgt);
     this.x = this.canvas.getContext("2d");
     this.size = size; this.pixel = pixel; this.last = null;
     this.color = color;
-    if (!pixel) this.stamp = makeStamp(size, hardness, color);
+    if (!pixel) this.stamp = makeStamp(size, hardness, color, chisel);
     this.spacing = pixel ? 1 : Math.max(0.5, size * 0.1);
   }
   dab(p) {
@@ -153,42 +160,66 @@ class Stroke {
 
 let lastStrokeEnd = null; // for Shift+click straight lines
 
-/** Brush, pencil and eraser share one implementation. */
-export function paintTool(A, kind) {
+/** Variants of the brush tool group, which share one rail button. */
+export const BRUSHES = [
+  { value: "brush", label: "Brush", key: "B" },
+  { value: "pencil", label: "Pencil", key: "N" },
+  { value: "pen", label: "Pen" },
+  { value: "highlighter", label: "Highlighter" },
+];
+
+const HINTS = {
+  brush: "Soft or hard round brush.",
+  pencil: "Hard-edged, pixel-sharp lines.",
+  pen: "Smooth ink lines; steadies shaky strokes, good for writing and signatures.",
+  highlighter: "Flat, see-through ink that darkens what is under it, like a real highlighter.",
+};
+
+/**
+ * Brush-group variants and the eraser share one implementation.
+ * swap(variant) switches the brush group to another variant.
+ */
+export function paintTool(A, kind, swap) {
   const key = `pc-${kind}`;
   const saved = JSON.parse(localStorage.getItem(key) || "null") || {};
+  const m = minSide(A.doc);
+  const defSize = { pencil: 2, pen: Math.max(2, Math.round(m / 300)), highlighter: Math.max(12, Math.round(m / 25)) }[kind] || Math.max(4, Math.round(m / 60));
   const o = {
-    size: saved.size || (kind === "pencil" ? 2 : Math.max(4, Math.round(minSide(A.doc) / 60))),
+    size: saved.size || defSize,
     hardness: saved.hardness ?? (kind === "eraser" ? 80 : 70),
-    opacity: saved.opacity ?? 100,
+    opacity: saved.opacity ?? (kind === "highlighter" ? 70 : 100),
     block: !!saved.block,
   };
   const save = () => localStorage.setItem(key, JSON.stringify(o));
   let hover = null, g = null;
   const isPixel = () => kind === "pencil" || (kind === "eraser" && o.block);
-  const maxSize = Math.max(200, Math.round(minSide(A.doc) / 3));
+  const hasHardness = () => kind === "brush" || (kind === "eraser" && !o.block);
+  const chisel = kind === "highlighter", smooth = kind === "pen";
+  const maxSize = Math.max(200, Math.round(m / 3));
   const sizeS = slider({ label: "Size", min: 1, max: maxSize, value: o.size, format: (v) => `${v} px`, onInput: (v) => { o.size = v; save(); A.redraw(); } });
   const hardS = slider({ label: "Hardness", min: 0, max: 100, value: o.hardness, format: (v) => `${v}%`, onInput: (v) => { o.hardness = v; save(); } });
   const opS = slider({ label: "Opacity", min: 1, max: 100, value: o.opacity, format: (v) => `${v}%`, onInput: (v) => { o.opacity = v; save(); } });
   const colors = kind === "eraser" ? null : colorRow(A);
-  const modeSeg = kind === "eraser" ? seg([{ value: "soft", label: "Brush" }, { value: "block", label: "Block" }], o.block ? "block" : "soft", (v) => { o.block = v === "block"; hardS.hidden = o.block; save(); }) : null;
-  if (kind === "pencil" || o.block) hardS.hidden = true;
+  const modeSeg = kind === "eraser" ? seg([{ value: "soft", label: "Brush" }, { value: "block", label: "Block" }], o.block ? "block" : "soft", (v) => { o.block = v === "block"; hardS.hidden = !hasHardness(); save(); }) : null;
+  const typeSeg = swap ? seg(BRUSHES.map((b) => ({ value: b.value, label: b.label })), kind, swap) : null;
+  hardS.hidden = !hasHardness();
+  const paintOpts = () => ({ opacity: o.opacity / 100, erase: kind === "eraser", blend: chisel ? "multiply" : "source-over" });
 
   const compose = () => {
     if (!g) return;
-    A.setSource(applyPaint(A, g.base, g.stroke.canvas, { opacity: o.opacity / 100, erase: kind === "eraser" }));
+    A.setSource(applyPaint(A, g.base, g.stroke.canvas, paintOpts()));
   };
   const throttled = frameThrottle(compose);
 
   return {
-    title: { brush: "Brush", pencil: "Pencil", eraser: "Eraser" }[kind],
+    title: kind === "eraser" ? "Eraser" : BRUSHES.find((b) => b.value === kind).label,
     body: [
-      modeSeg,
+      typeSeg, modeSeg,
       sizeS, hardS, opS,
       colors,
       h("p", { class: "hint" }, kind === "eraser"
         ? "Shift+click erases a straight line. [ and ] change the size."
-        : "Shift+click draws a straight line. Alt+click picks a color. [ and ] change the size."),
+        : `${HINTS[kind]} Shift+click draws a straight line. Alt+click picks a color. [ and ] change the size.`),
     ].filter(Boolean),
     cursor: "brush",
     wantsPointer: true,
@@ -199,9 +230,9 @@ export function paintTool(A, kind) {
       if (!guard(A)) return;
       const d = A.doc;
       g = {
-        base: d.canvas,
+        base: d.canvas, at: p, raw: p,
         stroke: new Stroke(d.width, d.height, {
-          size: o.size, hardness: o.hardness / 100, pixel: isPixel(),
+          size: o.size, hardness: hasHardness() ? o.hardness / 100 : 1, pixel: isPixel(), chisel,
           color: kind === "eraser" ? "#000" : A.colors.fg,
         }),
       };
@@ -212,13 +243,17 @@ export function paintTool(A, kind) {
     move(p) {
       hover = p;
       if (!g) return A.redraw();
-      g.stroke.to(p);
+      g.raw = p;
+      // The pen trails the pointer a little, which smooths out jitter.
+      g.at = smooth ? { x: g.at.x + (p.x - g.at.x) * 0.35, y: g.at.y + (p.y - g.at.y) * 0.35 } : p;
+      g.stroke.to(g.at);
       throttled();
     },
     up() {
       if (!g) return;
+      if (smooth) g.stroke.to(g.raw);
       throttled.flush();
-      const out = applyPaint(A, g.base, g.stroke.canvas, { opacity: o.opacity / 100, erase: kind === "eraser" });
+      const out = applyPaint(A, g.base, g.stroke.canvas, paintOpts());
       lastStrokeEnd = g.stroke.last;
       g = null;
       A.setSource(null);
@@ -232,7 +267,10 @@ export function paintTool(A, kind) {
         return true;
       }
     },
-    overlay(ctx, view) { brushCursor(ctx, view, hover, Math.max(0.5, o.size / 2), isPixel()); },
+    overlay(ctx, view) {
+      const r = Math.max(0.5, o.size / 2);
+      brushCursor(ctx, view, hover, chisel ? r * CHISEL : r, isPixel() || chisel, r);
+    },
     cleanup() { A.setSource(null); },
   };
 }
@@ -256,7 +294,7 @@ function shapePath(x, kind, a, b, width) {
 
 export function shapesTool(A) {
   const saved = JSON.parse(localStorage.getItem("pc-shapes") || "null") || {};
-  const o = { kind: saved.kind || "rect", size: saved.size || Math.max(2, Math.round(minSide(A.doc) / 160)), fill: !!saved.fill, opacity: saved.opacity ?? 100 };
+  const o = { kind: ["line", "arrow", "rect", "ellipse"].includes(saved.kind) ? saved.kind : "rect", size: saved.size || Math.max(2, Math.round(minSide(A.doc) / 160)), fill: !!saved.fill, opacity: saved.opacity ?? 100 };
   const save = () => localStorage.setItem("pc-shapes", JSON.stringify(o));
   let g = null;
   const colors = colorRow(A);
@@ -265,13 +303,8 @@ export function shapesTool(A) {
     const d = A.doc, paint = makeCanvas(d.width, d.height), x = paint.getContext("2d");
     x.strokeStyle = x.fillStyle = A.colors.fg;
     x.lineWidth = o.size; x.lineCap = x.lineJoin = "round";
-    if (o.kind === "marker") {
-      x.globalAlpha = 0.4; x.lineWidth = o.size * 4; x.lineCap = "square";
-      x.beginPath(); g.pts.forEach((p, i) => (i ? x.lineTo(p.x, p.y) : x.moveTo(p.x, p.y))); x.stroke();
-    } else {
-      shapePath(x, o.kind, g.a, g.b, o.size);
-      if (o.fill && (o.kind === "rect" || o.kind === "ellipse")) x.fill(); else x.stroke();
-    }
+    shapePath(x, o.kind, g.a, g.b, o.size);
+    if (o.fill && (o.kind === "rect" || o.kind === "ellipse")) x.fill(); else x.stroke();
     return applyPaint(A, g.base, paint, { opacity: o.opacity / 100 });
   };
   const throttled = frameThrottle(() => g && A.setSource(render()));
@@ -280,7 +313,7 @@ export function shapesTool(A) {
     body: [
       seg([
         { value: "line", label: "Line" }, { value: "arrow", label: "Arrow" }, { value: "rect", label: "Rectangle" },
-        { value: "ellipse", label: "Ellipse" }, { value: "marker", label: "Highlighter" },
+        { value: "ellipse", label: "Ellipse" },
       ], o.kind, (v) => { o.kind = v; save(); }),
       colors,
       slider({ label: "Line width", min: 1, max: Math.max(40, Math.round(minSide(A.doc) / 12)), value: o.size, format: (v) => `${v} px`, onInput: (v) => { o.size = v; save(); } }),
@@ -291,15 +324,15 @@ export function shapesTool(A) {
     cursor: "crosshair",
     wantsPointer: true,
     onColorChange() { colors.sync(); },
-    down(p) { if (!guard(A)) return; g = { base: A.doc.canvas, a: p, b: p, pts: [p] }; throttled(); },
+    down(p) { if (!guard(A)) return; g = { base: A.doc.canvas, a: p, b: p }; throttled(); },
     move(p, e) {
       if (!g) return;
       if (e?.shiftKey) {
         const dx = p.x - g.a.x, dy = p.y - g.a.y;
         if (o.kind === "rect" || o.kind === "ellipse") { const m = Math.max(Math.abs(dx), Math.abs(dy)); p = { x: g.a.x + Math.sign(dx || 1) * m, y: g.a.y + Math.sign(dy || 1) * m }; }
-        else if (o.kind !== "marker") { const ang = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4), len = Math.hypot(dx, dy); p = { x: g.a.x + Math.cos(ang) * len, y: g.a.y + Math.sin(ang) * len }; }
+        else { const ang = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4), len = Math.hypot(dx, dy); p = { x: g.a.x + Math.cos(ang) * len, y: g.a.y + Math.sin(ang) * len }; }
       }
-      g.b = p; g.pts.push(p);
+      g.b = p;
       throttled();
     },
     up() { if (!g) return; const out = render(); g = null; A.setSource(null); A.doc.commit(out, {}); },

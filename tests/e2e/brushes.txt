@@ -1,0 +1,43 @@
+shot:B0-rail
+tool:paint
+eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=paint]').title
+range:0:24
+click:#panel .swatch[data-v="#ff3b30"]
+drag:0.2:0.3:0.8:0.3
+clicktext:Pen
+eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=paint] span').textContent
+click:#panel .swatch[data-v="#0a84ff"]
+path:0.2:0.45:0.3:0.5:0.4:0.42:0.5:0.52:0.6:0.44:0.7:0.5:0.8:0.45
+eval:document.querySelector('#tools [data-tool=paint]').dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 }))
+shot:B1-flyout
+eval:[...document.querySelectorAll(".tool-flyout button")].map((b) => b.textContent + (b.classList.contains("on") ? "*" : "")).join(", ")
+eval:[...document.querySelectorAll(".tool-flyout button")].find((b) => b.textContent.startsWith("Highlighter")).click()
+eval:!!document.querySelector(".tool-flyout") + " | " + document.querySelector("#side h2").textContent
+click:#panel .swatch[data-v="#ffcc00"]
+drag:0.15:0.32:0.85:0.32
+drag:0.15:0.48:0.85:0.48
+path:0.3:0.6:0.5:0.6:0.5:0.75
+shot:B2-highlighter
+key:b
+eval:document.querySelector("#side h2").textContent
+key:Shift+B
+eval:document.querySelector("#side h2").textContent
+drag:0.2:0.85:0.8:0.85
+key:e
+eval:document.querySelector("#side h2").textContent
+key:b
+eval:document.querySelector("#side h2").textContent + " | " + localStorage.getItem("pc-brush-tool")
+key:e
+key:n
+eval:document.querySelector("#side h2").textContent
+eval:document.querySelector('#tools [data-tool=paint]').classList.contains("active")
+eval:__photocairn.doc.undoStack.length
+tool:highlighter
+eval:document.querySelector("#side h2").textContent
+eval:document.querySelector('#tools [data-tool=paint]').dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch", button: 0, clientX: 20, clientY: 200 }))
+wait:600
+eval:!!document.querySelector(".tool-flyout")
+key:Escape
+eval:!!document.querySelector(".tool-flyout")
+tool:shapes
+shot:B3-shapes
