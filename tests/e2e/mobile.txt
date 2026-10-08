@@ -1,0 +1,15 @@
+tool:cutout
+clicktext:Best quality
+clicktext:Remove background
+wait:2000
+shot:m1-progress
+waitfor:document.querySelector("#panel .progress").hidden
+wait:500
+shot:m2-cut
+eval:document.querySelector("#panel .hint").textContent
+tool:crop
+shot:m3-crop
+click:#btn-export
+wait:800
+shot:m4-export
+eval:document.querySelector("#export-meta").textContent

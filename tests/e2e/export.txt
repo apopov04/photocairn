@@ -1,0 +1,15 @@
+click:#btn-export
+wait:800
+clicktext:JPG
+range:0:60
+wait:800
+eval:document.querySelector("#export-meta").textContent
+clicktext:Download
+wait:2000
+key:Escape
+tool:crop
+clicktext:16:9
+clicktext:Crop
+eval:[__photocairn.doc.width, __photocairn.doc.height].join("x")
+key:Control+z
+eval:[__photocairn.doc.width, __photocairn.doc.height].join("x")

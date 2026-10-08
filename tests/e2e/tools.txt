@@ -1,0 +1,43 @@
+tool:crop
+clicktext:1:1
+drag:0.5:0.5:0.6:0.55
+shot:t1-crop
+clicktext:Crop
+eval:[__photocairn.doc.width, __photocairn.doc.height].join("x")
+tool:resize
+clicktext:50%
+clicktext:Resize
+eval:[__photocairn.doc.width, __photocairn.doc.height].join("x")
+tool:adjust
+range:0:40
+range:5:60
+shot:t2-adjust
+clicktext:Apply
+wait:500
+tool:looks
+click:#panel .looks-grid button[data-v="noir"]
+shot:t3-looks
+clicktext:Apply
+wait:300
+tool:redact
+drag:0.45:0.3:0.6:0.45
+shot:t4-redact
+tool:draw
+clicktext:Arrow
+drag:0.3:0.7:0.45:0.55
+shot:t5-draw
+tool:text
+range:0:60
+shot:t6-text
+clicktext:Add text
+tool:frame
+click:#panel input[type=checkbox]
+range:1:8
+click:#panel .swatch[data-v="#ffffff"]
+shot:t7-frame
+clicktext:Apply
+click:#btn-export
+wait:800
+shot:t8-export
+eval:document.querySelector("#export-meta").textContent
+eval:__photocairn.doc.undoStack.length

@@ -1,0 +1,21 @@
+tool:cutout
+clicktext:Remove background
+wait:1500
+waitfor:document.querySelector("#panel .progress").hidden
+click:#panel .swatch[data-v="#0a84ff"]
+wait:300
+shot:c1-bluebg
+click:#panel .swatch[data-v="blur"]
+wait:500
+shot:c2-blurbg
+clicktext:Erase
+drag:0.3:0.2:0.5:0.25
+wait:300
+shot:c3-erased
+eval:__photocairn.doc.undoStack.length
+key:Escape
+click:#btn-undo
+click:#btn-undo
+click:#btn-undo
+eval:__photocairn.doc.undoStack.length
+shot:c4-undone
