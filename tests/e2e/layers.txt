@@ -3,16 +3,16 @@ eval:__photocairn.doc.layers.length
 addlayer:tests/e2e/sample.jpg
 eval:[__photocairn.doc.layers.length, __photocairn.doc.active, __photocairn.doc.layers.map(l=>l.name).join("|")].join(" ")
 range:0:60
-select:#panel select:multiply
+select:#side select:multiply
 shot:L1-opacity-blend
 tool:move
 drag:0.5:0.5:0.65:0.4
 shot:L2-moved
 eval:__photocairn.doc.undoStack.length
 tool:layers
-click:#panel .layers li:last-child .eye
+click:#side .layers li:last-child .eye
 shot:L3-hidden-bottom
-click:#panel .layers li:last-child .eye
+click:#side .layers li:last-child .eye
 tool:text
 clicktext:Add text
 eval:__photocairn.doc.layers.map(l=>l.name).join("|")
@@ -31,9 +31,9 @@ clicktext:Crop
 eval:__photocairn.doc.layers.map(l=>l.canvas.width+"x"+l.canvas.height).join(" ")
 shot:L5-rot-crop
 tool:layers
-clicktext:Merge ↓
+clicktext:Merge down
 eval:__photocairn.doc.layers.map(l=>l.name).join("|")
-clicktext:Flatten
+menu:Layer:Flatten image
 eval:__photocairn.doc.layers.length
 key:Control+z
 key:Control+z

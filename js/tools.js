@@ -970,19 +970,30 @@ const LOCKS = [
   ["all", "All", "Lock all: no changes at all"],
 ];
 
-export function layersTool(A) {
+const ICON = {
+  add: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M12 8v8M8 12h8"/></svg>',
+  image: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 8"/></svg>',
+  dup: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>',
+  up: '<svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
+  down: '<svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
+  merge: '<svg viewBox="0 0 24 24"><path d="M8 4v6l4 4 4-4V4M12 14v6"/></svg>',
+  clear: '<svg viewBox="0 0 24 24"><path d="M4 20h16M7 16 17 6M7 6l10 10" opacity=".9"/></svg>',
+  trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+};
+
+/** The always-visible Layers dock (bottom of the right sidebar). */
+export function layersPanel(A) {
+  const el = h("div", { class: "layers-panel" });
   const list = h("ol", { class: "layers", "aria-label": "Layers (top first)" });
-  const opacity = slider({
-    label: "Opacity", min: 0, max: 100, value: 100, format: (v) => `${v}%`,
-    onInput: (v) => liveProp({ opacity: v / 100 }),
-    onChange: () => endLive(),
-  });
-  const blend = h("select", { "aria-label": "Blend mode" }, BLEND_MODES.map(([v, label]) => h("option", { value: v }, label)));
+  const opacity = h("input", { type: "range", min: 0, max: 100, value: 100, "aria-label": "Layer opacity" });
+  const opOut = h("output", {}, "100%");
+  opacity.addEventListener("input", () => { opOut.textContent = `${opacity.value}%`; liveProp({ opacity: opacity.value / 100 }); });
+  opacity.addEventListener("change", () => endLive());
+  const blend = h("select", { "aria-label": "Blend mode", title: "Blend mode" }, BLEND_MODES.map(([v, label]) => h("option", { value: v }, label)));
   blend.onchange = () => { if (notAllLocked()) A.doc.setLayerProps(A.doc.active, { blend: blend.value }); else blend.value = A.doc.layer.blend; };
   const lockRow = h("div", { class: "lock-row" });
   const notAllLocked = () => { if (A.doc.layer.lock?.all) { A.toast("This layer is fully locked."); return false; } return true; };
 
-  // Live property edits record one undo step per gesture.
   let liveStarted = false;
   function liveProp(props) {
     const d = A.doc;
@@ -993,62 +1004,7 @@ export function layersTool(A) {
   }
   function endLive() { if (liveStarted) { liveStarted = false; A.doc.emit(); } else render(); }
 
-  const btn = (label, title, onclick, cls = "") => h("button", { title, "aria-label": title, class: cls, onclick }, label);
-  const addBlank = () => A.doc.change((d) => {
-    d.layers.splice(d.active + 1, 0, makeLayer(makeCanvas(d.width, d.height), `Layer ${d.layers.length + 1}`));
-    d.active += 1;
-  });
-  const duplicate = () => A.doc.change((d) => {
-    const l = d.layer;
-    d.layers.splice(d.active + 1, 0, makeLayer(copyCanvas(l.canvas), `${l.name} copy`, { opacity: l.opacity, blend: l.blend, visible: l.visible }));
-    d.active += 1;
-  });
-  const remove = () => {
-    if (!A.doc.hasLayers) return A.toast("An image needs at least one layer.");
-    if (!notAllLocked()) return;
-    A.doc.change((d) => { d.layers.splice(d.active, 1); d.active = Math.min(d.active, d.layers.length - 1); });
-  };
-  const clear = () => {
-    if (!guard(A)) return;
-    A.doc.commit(makeCanvas(A.doc.width, A.doc.height), {});
-  };
-  const moveBy = (dir) => {
-    const d = A.doc, j = d.active + dir;
-    if (j < 0 || j >= d.layers.length) return;
-    d.change((d) => { [d.layers[d.active], d.layers[j]] = [d.layers[j], d.layers[d.active]]; d.active = j; });
-  };
-  const flatInto = (layers) => {
-    const d = A.doc, c = makeCanvas(d.width, d.height), x = c.getContext("2d");
-    for (const l of layers) { if (!l.visible) continue; x.globalAlpha = l.opacity; x.globalCompositeOperation = l.blend; x.drawImage(l.canvas, 0, 0); }
-    return c;
-  };
-  const mergeDown = () => {
-    const d = A.doc;
-    if (d.active === 0) return A.toast("There's no layer below to merge into.");
-    const below = d.layers[d.active - 1];
-    if (below.lock?.all || below.lock?.pixels) return A.toast(`"${below.name}" is locked.`);
-    d.change((d) => {
-      const top = d.layers[d.active], below = d.layers[d.active - 1];
-      const c = copyCanvas(below.canvas), x = c.getContext("2d");
-      if (top.visible) { x.globalAlpha = top.opacity; x.globalCompositeOperation = top.blend; x.drawImage(top.canvas, 0, 0); }
-      d.layers.splice(d.active - 1, 2, { ...below, canvas: c, meta: {} });
-      d.active -= 1;
-    });
-  };
-  const mergeVisible = () => {
-    const d = A.doc, vis = d.layers.filter((l) => l.visible);
-    if (vis.length < 2) return A.toast("Need at least two visible layers.");
-    d.change((d) => {
-      const merged = makeLayer(flatInto(d.layers), "Merged");
-      const firstVis = d.layers.findIndex((l) => l.visible);
-      d.layers = d.layers.filter((l, i) => !l.visible || i === firstVis).map((l, i, arr) => (l.visible ? merged : l));
-      d.active = d.layers.indexOf(merged);
-    });
-  };
-  const flatten = () => {
-    if (!A.doc.hasLayers) return A.toast("There's only one layer.");
-    A.doc.change((d) => { d.layers = [makeLayer(copyCanvas(d.composite()), "Background")]; d.active = 0; });
-  };
+  const ops_ = layerOps(A);
   const rename = (i) => {
     const name = prompt("Layer name", A.doc.layers[i].name);
     if (name && name.trim()) A.doc.setLayerProps(i, { name: name.trim().slice(0, 40) });
@@ -1057,61 +1013,107 @@ export function layersTool(A) {
     const d = A.doc, cur = d.layer.lock || {};
     d.setLayerProps(d.active, { lock: { ...cur, [key]: !cur[key] } });
   };
+  const ib = (icon, title, onclick, cls = "") => h("button", { class: `icon-btn ${cls}`, title, "aria-label": title, html: ICON[icon], onclick });
 
   function render() {
     const d = A.doc;
+    if (!d) return;
     list.replaceChildren();
     for (let i = d.layers.length - 1; i >= 0; i--) {
       const l = d.layers[i];
       const eye = h("button", { class: "icon-btn eye", title: l.visible ? "Hide layer" : "Show layer", "aria-label": l.visible ? "Hide layer" : "Show layer", html: l.visible ? EYE : EYE_OFF });
       eye.onclick = (e) => { e.stopPropagation(); d.setLayerProps(i, { visible: !l.visible }); };
       const locked = l.lock && Object.values(l.lock).some(Boolean);
-      const name = h("span", { class: "lname", title: "Double-click to rename" }, l.name, locked ? h("span", { class: "lock-ico", title: "Locked" }, "🔒") : null);
+      const name = h("span", { class: "lname", title: "Double-click to rename" }, l.name);
       const sub = h("span", { class: "lsub" }, [l.opacity < 1 ? `${Math.round(l.opacity * 100)}%` : "", l.blend !== "source-over" ? BLEND_MODES.find((b) => b[0] === l.blend)[1] : ""].filter(Boolean).join(" · "));
       const li = h("li", {
         class: `${i === d.active ? "active" : ""} ${l.visible ? "" : "hidden-layer"}`, tabindex: 0,
         onclick: () => { if (d.active !== i) { d.active = i; d.emit(); } },
         ondblclick: () => rename(i),
         onkeydown: (e) => { if (e.key === "Enter") rename(i); },
-      }, thumb(l, d.width, d.height), h("span", { class: "linfo" }, name, sub), eye);
+      }, eye, thumb(l, d.width, d.height), h("span", { class: "linfo" }, name, sub), locked ? h("span", { class: "lock-ico", title: "Locked", html: LOCK_ICONS.all }) : null);
       list.append(li);
     }
-    opacity.set(Math.round(d.layer.opacity * 100));
+    opacity.value = Math.round(d.layer.opacity * 100); opOut.textContent = `${opacity.value}%`;
     blend.value = d.layer.blend;
     const lock = d.layer.lock || {};
-    lockRow.replaceChildren(...LOCKS.map(([key, label, title]) =>
-      h("button", { class: lock[key] ? "on" : "", title, "aria-pressed": lock[key] ? "true" : "false", onclick: () => toggleLock(key) },
-        h("span", { html: LOCK_ICONS[key], style: "display:contents" }), label)));
+    lockRow.replaceChildren(h("span", { class: "lock-label" }, "Lock:"), ...LOCKS.map(([key, label, title]) =>
+      h("button", { class: `icon-btn ${lock[key] ? "on" : ""}`, title, "aria-label": title, "aria-pressed": lock[key] ? "true" : "false", html: LOCK_ICONS[key], onclick: () => toggleLock(key) })));
   }
 
-  const addInput = h("input", { type: "file", accept: "image/*,.psd", hidden: true });
-  addInput.onchange = () => { const f = addInput.files[0]; addInput.value = ""; if (f) A.addImageLayer(f, f.name); };
+  el.append(
+    h("div", { class: "dock-head" }, h("h2", {}, "Layers")),
+    h("div", { class: "layer-props" }, blend, h("label", { class: "op" }, "Opacity", opacity, opOut)),
+    lockRow,
+    list,
+    h("div", { class: "layer-bar" },
+      ib("add", "New layer (Ctrl+Shift+N)", ops_.addBlank),
+      ib("image", "Add image as layer", () => A.pickLayerImage()),
+      ib("dup", "Duplicate layer", ops_.duplicate),
+      ib("up", "Move layer up", () => ops_.moveBy(1)),
+      ib("down", "Move layer down", () => ops_.moveBy(-1)),
+      ib("merge", "Merge down (Ctrl+E)", ops_.mergeDown),
+      ib("clear", "Clear layer", ops_.clear),
+      ib("trash", "Delete layer", ops_.remove, "danger")),
+  );
+  return { el, render };
+}
 
-  render();
+/** Layer commands shared by the Layers dock and the Layer menu. */
+export function layerOps(A) {
+  const lockedAll = () => { if (A.doc.layer.lock?.all) { A.toast("This layer is fully locked."); return true; } return false; };
+  const flatInto = (layers) => {
+    const d = A.doc, c = makeCanvas(d.width, d.height), x = c.getContext("2d");
+    for (const l of layers) { if (!l.visible) continue; x.globalAlpha = l.opacity; x.globalCompositeOperation = l.blend; x.drawImage(l.canvas, 0, 0); }
+    return c;
+  };
   return {
-    title: "Layers",
-    body: [
-      list,
-      h("div", { class: "layer-actions" },
-        btn("+ New", "New empty layer", addBlank),
-        btn("+ Image", "Add a photo as a new layer", () => addInput.click()),
-        btn("Duplicate", "Duplicate layer", duplicate),
-        btn("Delete", "Delete layer", remove, "danger")),
-      h("div", { class: "layer-actions" },
-        btn("↑ Up", "Move layer up", () => moveBy(1)),
-        btn("↓ Down", "Move layer down", () => moveBy(-1)),
-        btn("Clear", "Erase everything on this layer", clear),
-        btn("Merge ↓", "Merge into the layer below", mergeDown)),
-      h("div", { class: "layer-actions two" },
-        btn("Merge visible", "Merge all visible layers into one", mergeVisible),
-        btn("Flatten", "Merge all layers into one", flatten)),
-      h("div", { class: "sub" }, "Selected layer"),
-      opacity,
-      h("label", {}, "Blend mode", blend),
-      h("label", {}, "Lock", lockRow),
-      h("p", { class: "hint" }, "Use the Move (V) and Transform (Ctrl+T) tools to position and scale layers. Paste or drop a photo to add it as a layer."),
-      addInput,
-    ],
-    onDocChange: render,
+    addBlank: () => A.doc.change((d) => {
+      d.layers.splice(d.active + 1, 0, makeLayer(makeCanvas(d.width, d.height), `Layer ${d.layers.length + 1}`));
+      d.active += 1;
+    }),
+    duplicate: () => A.doc.change((d) => {
+      const l = d.layer;
+      d.layers.splice(d.active + 1, 0, makeLayer(copyCanvas(l.canvas), `${l.name} copy`, { opacity: l.opacity, blend: l.blend, visible: l.visible }));
+      d.active += 1;
+    }),
+    remove: () => {
+      if (!A.doc.hasLayers) return A.toast("An image needs at least one layer.");
+      if (lockedAll()) return;
+      A.doc.change((d) => { d.layers.splice(d.active, 1); d.active = Math.min(d.active, d.layers.length - 1); });
+    },
+    clear: () => { if (guard(A)) A.doc.commit(makeCanvas(A.doc.width, A.doc.height), {}); },
+    moveBy: (dir) => {
+      const d = A.doc, j = d.active + dir;
+      if (j < 0 || j >= d.layers.length) return;
+      d.change((d) => { [d.layers[d.active], d.layers[j]] = [d.layers[j], d.layers[d.active]]; d.active = j; });
+    },
+    mergeDown: () => {
+      const d = A.doc;
+      if (d.active === 0) return A.toast("There's no layer below to merge into.");
+      const below = d.layers[d.active - 1];
+      if (below.lock?.all || below.lock?.pixels) return A.toast(`"${below.name}" is locked.`);
+      d.change((d) => {
+        const top = d.layers[d.active], below = d.layers[d.active - 1];
+        const c = copyCanvas(below.canvas), x = c.getContext("2d");
+        if (top.visible) { x.globalAlpha = top.opacity; x.globalCompositeOperation = top.blend; x.drawImage(top.canvas, 0, 0); }
+        d.layers.splice(d.active - 1, 2, { ...below, canvas: c, meta: {} });
+        d.active -= 1;
+      });
+    },
+    mergeVisible: () => {
+      const d = A.doc;
+      if (d.layers.filter((l) => l.visible).length < 2) return A.toast("Need at least two visible layers.");
+      d.change((d) => {
+        const merged = makeLayer(flatInto(d.layers), "Merged");
+        const firstVis = d.layers.findIndex((l) => l.visible);
+        d.layers = d.layers.filter((l, i) => !l.visible || i === firstVis).map((l) => (l.visible ? merged : l));
+        d.active = d.layers.indexOf(merged);
+      });
+    },
+    flatten: () => {
+      if (!A.doc.hasLayers) return A.toast("There's only one layer.");
+      A.doc.change((d) => { d.layers = [makeLayer(copyCanvas(d.composite()), "Background")]; d.active = 0; });
+    },
   };
 }

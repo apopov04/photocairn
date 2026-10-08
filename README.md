@@ -14,6 +14,13 @@ Photocairn is a fast, focused editor for exactly those jobs. **Everything runs o
 
 ## What it does
 
+The layout will feel familiar if you've used Photoshop:
+- a **menu bar** (File, Edit, Image, Layer, Select, Filter, View, Help)
+- **tools** down the left
+- the selected tool's **options** at the top right, with the **Layers** panel below them
+
+On phones, the tools sit along the bottom and the options and layers share a tabbed sheet.
+
 **Files**
 - Open PNG, JPG, WebP, AVIF, GIF and **PSD** (with layers). You can also drag & drop, paste from the clipboard, or start a **new blank image** (with presets; white, transparent or colored background).
 - Save as PNG, JPG, WebP or **layered PSD** (opens in Photoshop, GIMP and Photopea), with quality and size sliders and a live file-size estimate, or copy to the clipboard. **Location and camera data (EXIF) are always removed.**
@@ -131,6 +138,7 @@ npm i && CHROME=/path/to/chrome npm run test:e2e   # browser end-to-end scenario
 - `js/editor.js`: the document model (layers plus memory-capped undo history) and the zoomable viewport. Layers are immutable snapshots, so undo stores references instead of pixel copies.
 - `js/tools.js`: the crop, resize, adjust, filters, text, layers and other panels. Each tool is a factory that builds its panel and handles pointer input in image coordinates.
 - `js/paint.js`: the brush engine (stamped strokes with hardness and per-stroke opacity), pencil, eraser, shapes, paint bucket, gradient, eyedropper, selection, move and free transform. All pixel edits go through one function, which respects the selection and layer locks.
+- `js/menus.js`: the menu bar (the same menus open from a single button on phones).
 - `js/psd.js`: PSD import/export with [ag-psd](https://github.com/Agamnentzar/ag-psd), loaded only when needed.
 - `js/bg-worker.js`: background removal in a Web Worker. It runs [U²-Net](https://github.com/xuebinqin/U-2-Net) models with [ONNX Runtime Web](https://onnxruntime.ai/), and the mask is upscaled and applied on a canvas.
 - `sw.js`: service worker for offline use.

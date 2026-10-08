@@ -1,4 +1,4 @@
-click:#btn-new
+menu:File:New…
 wait:300
 shot:N1-dialog
 clicktext:1080 × 1350

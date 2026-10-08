@@ -7,6 +7,7 @@ import { h } from "./ui.js";
 import * as T from "./tools.js";
 import * as P from "./paint.js";
 import * as PSD from "./psd.js";
+import { buildMenus } from "./menus.js";
 
 const $ = (s) => document.querySelector(s);
 const app = $("#app"), stageWrap = $("#stage-wrap"), panel = $("#panel");
@@ -148,7 +149,7 @@ async function addImageLayer(blob, name = "image") {
     d.layers.splice(d.active + 1, 0, makeLayer(c, baseName(name).slice(0, 30) || "Image"));
     d.active += 1;
   });
-  if (toolName !== "layers") selectTool("layers");
+  showTab("layers");
   toast("Added as a new layer. Use Move layer to position it.");
 }
 
@@ -189,7 +190,9 @@ function setDoc(d) {
   doc = d;
   doc.onChange(onDocChange);
   app.classList.remove("empty");
-  selectTool(null);
+  toolName = null;
+  selectTool(railTool);
+  layersDock.render();
   preview = null;
   view.imgW = 0; display();
   requestAnimationFrame(() => { view.resize(); view.fit(); });
@@ -202,6 +205,7 @@ function onDocChange() {
   updateChrome();
   updateLayerNote();
   updateAnts();
+  layersDock.render();
   tool?.onDocChange?.();
   scheduleExportEstimate();
 }
@@ -248,12 +252,10 @@ function newImageDialog() {
   document.body.append(dlg);
   dlg.showModal();
 }
-$("#btn-new").onclick = newImageDialog;
 $("#btn-new-2").onclick = newImageDialog;
 
 fileInput.addEventListener("change", () => { const f = fileInput.files[0]; fileInput.value = ""; if (f) openBlob(f, f.name); });
 const pick = () => fileInput.click();
-$("#btn-open").onclick = pick;
 $("#btn-open-2").onclick = pick;
 
 // Drag & drop anywhere.
@@ -289,26 +291,35 @@ const FACTORIES = {
   export: exportTool,
 };
 
-function selectTool(name, toggle = true) {
-  if (name && name === toolName && !toggle) return;
+// Rail tools stay selected (like Photoshop); "panel" tools opened from the
+// menus (Adjust, Resize...) return to the previous rail tool when closed.
+const RAIL_TOOLS = new Set(["move", "select", "crop", "cutout", "brush", "pencil", "eraser", "fill", "gradient", "eyedropper", "shapes", "text", "redact"]);
+let railTool = "move";
+
+function selectTool(name, toggle = false) {
+  if (!doc) return;
+  if (!name) name = railTool;
+  if (name === toolName && !toggle) { showTab("props"); return; }
   if (tool) { tool.cleanup?.(); }
   preview = null;
   display();
   tool = null;
   A.setCursor("pan"); A.setCursorStyle("");
   panel.replaceChildren();
-  if (name === toolName || !name) { toolName = null; markTool(); view.dirty = true; return; }
   toolName = name;
+  if (RAIL_TOOLS.has(name)) railTool = name;
   tool = FACTORIES[name](A);
   if (tool.cursor) A.setCursor(tool.cursor);
   if (tool.cursorStyle) A.setCursorStyle(tool.cursorStyle);
   layerNote = LAYER_TOOLS.has(name) ? h("p", { class: "layer-note" }) : null;
   panel.append(
-    h("div", { class: "panel-head" }, h("h2", {}, tool.title), h("button", { class: "x", "aria-label": "Close", onclick: () => selectTool(null) }, "×")),
+    h("div", { class: "panel-head" }, h("h2", {}, tool.title),
+      RAIL_TOOLS.has(name) ? null : h("button", { class: "x", "aria-label": "Close", title: "Close", onclick: () => selectTool(railTool) }, "×")),
     ...[layerNote, ...tool.body].filter(Boolean),
   );
   updateLayerNote();
   markTool();
+  showTab("props");
   view.dirty = true;
 }
 
@@ -330,6 +341,23 @@ $("#tools").addEventListener("click", (e) => {
   const b = e.target.closest("button[data-tool]");
   if (b && doc) selectTool(b.dataset.tool);
 });
+
+/* ------------------------------- right sidebar ------------------------------- */
+
+const side = $("#side");
+const layersDock = T.layersPanel(A);
+$("#layers-dock").append(layersDock.el);
+function showTab(tab) {
+  side.dataset.tab = tab;
+  for (const b of side.querySelectorAll(".side-tabs button")) b.classList.toggle("on", b.dataset.tab === tab);
+}
+showTab("props");
+side.querySelector(".side-tabs").addEventListener("click", (e) => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); });
+
+const layerFileInput = h("input", { type: "file", accept: "image/*,.psd", hidden: true });
+layerFileInput.onchange = () => { const f = layerFileInput.files[0]; layerFileInput.value = ""; if (f) addImageLayer(f, f.name); };
+document.body.append(layerFileInput);
+A.pickLayerImage = () => layerFileInput.click();
 
 /* --------------------------------- viewport -------------------------------- */
 
@@ -463,17 +491,22 @@ addEventListener("keydown", (e) => {
   if (mod && k === "a") { e.preventDefault(); P.selectAll(A); return; }
   if (mod && k === "d") { e.preventDefault(); P.deselect(A); return; }
   if (mod && e.shiftKey && k === "i") { e.preventDefault(); P.invertSelection(A); return; }
+  if (mod && k === "c" && !e.shiftKey) { e.preventDefault(); copyToClipboard(false); return; }
+  if (mod && k === "x") { e.preventDefault(); copyToClipboard(true); return; }
+  if (mod && e.shiftKey && k === "n") { e.preventDefault(); L().addBlank(); return; }
+  if (mod && k === "e") { e.preventDefault(); L().mergeDown(); return; }
   if (mod && k === "j") { e.preventDefault(); P.selectionToLayer(A, false, makeLayer); return; }
   if (mod && k === "t") { e.preventDefault(); selectTool("transform", false); return; }
   if ((e.key === "Delete" || e.key === "Backspace") && !mod) { e.preventDefault(); P.clearSelection(A); return; }
   if (!mod && !e.altKey) {
-    const shortcut = { v: "move", m: "select", b: "brush", n: "pencil", e: "eraser", i: "eyedropper", k: "fill", g: "gradient", u: "shapes", t: "text", c: "crop", l: "layers" }[k];
+    const shortcut = { v: "move", m: "select", b: "brush", n: "pencil", e: "eraser", i: "eyedropper", k: "fill", g: "gradient", u: "shapes", t: "text", c: "crop" }[k];
     if (shortcut) { selectTool(shortcut, false); return; }
+    if (k === "l") { showTab("layers"); return; }
     if (k === "x") { swapColors(); return; }
     if (k === "d") { resetColors(); return; }
   }
   if (e.key === " ") { spaceDown = true; stageWrap.classList.add("pan"); e.preventDefault(); }
-  else if (e.key === "Escape") { if (doc.selection) P.deselect(A); else selectTool(null); }
+  else if (e.key === "Escape") { if (doc.selection) P.deselect(A); else if (!RAIL_TOOLS.has(toolName)) selectTool(railTool); }
   else if (e.key === "0") view.fit();
   else if (e.key === "1") view.actualSize();
   else if (e.key === "+" || e.key === "=") view.zoomAt(1.25, view.cssW / 2, view.cssH / 2);
@@ -592,6 +625,144 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
 if ("launchQueue" in window) {
   window.launchQueue.setConsumer(async (p) => { const f = await p.files?.[0]?.getFile(); if (f) openBlob(f, f.name); });
 }
+
+/* ---------------------------------- menus ---------------------------------- */
+
+const has = () => !!doc;
+const hasSel = () => !!doc?.selection;
+const L = () => T.layerOps(A);
+const wholeImage = (fn) => { if (!doc) return; doc.commitAll(fn); view.fit(); };
+
+/** Copy the selection (or the whole layer) to the system clipboard as PNG. */
+async function copyToClipboard(cut = false) {
+  if (!doc) return;
+  let src = doc.canvas, b = { x: 0, y: 0, w: doc.width, h: doc.height };
+  if (doc.selection) {
+    b = P.selectionBounds(A);
+    if (!b) return;
+    src = makeCanvas(doc.width, doc.height);
+    const x = src.getContext("2d");
+    x.drawImage(doc.canvas, 0, 0);
+    x.globalCompositeOperation = "destination-in"; x.drawImage(doc.selection.mask, 0, 0);
+  }
+  const out = makeCanvas(b.w, b.h);
+  out.getContext("2d").drawImage(src, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": new Promise((r) => out.toBlob(r, "image/png")) })]);
+    if (cut) { if (doc.selection) P.clearSelection(A); else L().clear(); }
+    toast(cut ? "Cut to clipboard" : "Copied to clipboard");
+  } catch { toast("Your browser didn't allow clipboard access."); }
+}
+
+function openCanvasSize() {
+  selectTool("resize");
+  panel.querySelector('.seg [data-v="canvas"]')?.click();
+}
+
+function shortcutsDialog() {
+  const rows = [
+    ["Move / Select / Crop", "V / M / C"], ["Brush / Pencil / Eraser", "B / N / E"], ["Bucket / Gradient / Eyedropper", "K / G / I"],
+    ["Shapes / Text", "U / T"], ["Free transform", "Ctrl+T"], ["Swap / reset colors", "X / D"], ["Brush size", "[ / ]"],
+    ["Select all / Deselect / Invert", "Ctrl+A / Ctrl+D / Ctrl+Shift+I"], ["Copy / Cut / Paste", "Ctrl+C / Ctrl+X / Ctrl+V"],
+    ["Selection to new layer", "Ctrl+J"], ["New layer / Merge down", "Ctrl+Shift+N / Ctrl+E"], ["Delete selected pixels", "Delete"],
+    ["Undo / Redo", "Ctrl+Z / Ctrl+Shift+Z"], ["Open / Save", "Ctrl+O / Ctrl+S"], ["Zoom / Fit / 100%", "+ − / 0 / 1"],
+    ["Pan", "Hold Space"], ["Compare with original", "Hold \\"], ["Layers panel", "L"],
+  ];
+  const dlg = h("dialog", { "aria-label": "Keyboard shortcuts" },
+    h("h2", {}, "Keyboard shortcuts"),
+    h("table", { class: "keys" }, rows.map(([a, b]) => h("tr", {}, h("td", {}, a), h("td", {}, h("kbd", {}, b))))),
+    h("div", { style: "display:flex;justify-content:flex-end;margin-top:12px" }, h("button", { class: "primary", onclick: () => dlg.close() }, "Close")));
+  dlg.addEventListener("close", () => dlg.remove());
+  document.body.append(dlg); dlg.showModal();
+}
+
+function aboutDialog() {
+  const dlg = h("dialog", { "aria-label": "About Photocairn" },
+    h("h2", {}, "Photocairn"),
+    h("p", {}, "A free, private photo editor that runs entirely in your browser. No ads, no account, and your images are never uploaded."),
+    h("p", {}, "Open source (MIT): ", h("a", { href: "https://github.com/apopov04/photocairn", target: "_blank", rel: "noopener" }, "github.com/apopov04/photocairn")),
+    h("div", { style: "display:flex;justify-content:flex-end;margin-top:12px" }, h("button", { class: "primary", onclick: () => dlg.close() }, "Close")));
+  dlg.addEventListener("close", () => dlg.remove());
+  document.body.append(dlg); dlg.showModal();
+}
+
+buildMenus($("#menus"), $("#btn-menu"), [
+  { label: "File", items: [
+    { label: "New…", action: newImageDialog },
+    { label: "Open…", shortcut: "Ctrl+O", action: pick },
+    { label: "Place image as layer…", action: () => A.pickLayerImage(), enabled: has },
+    "-",
+    { label: "Save / Export…", shortcut: "Ctrl+S", action: () => selectTool("export"), enabled: has },
+  ] },
+  { label: "Edit", items: [
+    { label: "Undo", shortcut: "Ctrl+Z", action: () => doc.undo(), enabled: () => !!doc?.canUndo },
+    { label: "Redo", shortcut: "Ctrl+Shift+Z", action: () => doc.redo(), enabled: () => !!doc?.canRedo },
+    "-",
+    { label: "Cut", shortcut: "Ctrl+X", action: () => copyToClipboard(true), enabled: has },
+    { label: "Copy", shortcut: "Ctrl+C", action: () => copyToClipboard(false), enabled: has },
+    "-",
+    { label: "Free transform", shortcut: "Ctrl+T", action: () => selectTool("transform"), enabled: has },
+    { label: "Fill with main color", action: () => P.fillSelection(A), enabled: has },
+    { label: "Clear", shortcut: "Delete", action: () => P.clearSelection(A), enabled: hasSel },
+  ] },
+  { label: "Image", items: [
+    { label: "Adjustments…", action: () => selectTool("adjust"), enabled: has },
+    { label: "Remove background…", action: () => selectTool("cutout"), enabled: has },
+    "-",
+    { label: "Image size…", action: () => selectTool("resize"), enabled: has },
+    { label: "Canvas size…", action: openCanvasSize, enabled: has },
+    { label: "Crop", shortcut: "C", action: () => selectTool("crop"), enabled: has },
+    { label: "Crop to selection", action: () => P.cropToSelection(A), enabled: hasSel },
+    "-",
+    { label: "Rotate 90° clockwise", action: () => wholeImage((c) => T.rotateCanvas90(c, 1)), enabled: has },
+    { label: "Rotate 90° counter-clockwise", action: () => wholeImage((c) => T.rotateCanvas90(c, -1)), enabled: has },
+    { label: "Rotate 180°", action: () => wholeImage((c) => T.rotateCanvas90(T.rotateCanvas90(c, 1), 1)), enabled: has },
+    { label: "Rotate by angle…", action: () => selectTool("rotate"), enabled: has },
+    { label: "Flip horizontal", action: () => doc && doc.commitAll((c) => T.flipCanvas(c, true)), enabled: has },
+    { label: "Flip vertical", action: () => doc && doc.commitAll((c) => T.flipCanvas(c, false)), enabled: has },
+    "-",
+    { label: "Corners & border…", action: () => selectTool("frame"), enabled: has },
+  ] },
+  { label: "Layer", items: [
+    { label: "New layer", shortcut: "Ctrl+Shift+N", action: () => L().addBlank(), enabled: has },
+    { label: "Duplicate layer", action: () => L().duplicate(), enabled: has },
+    { label: "Delete layer", action: () => L().remove(), enabled: () => !!doc?.hasLayers },
+    { label: "Clear layer", action: () => L().clear(), enabled: has },
+    "-",
+    { label: "Bring forward", action: () => L().moveBy(1), enabled: has },
+    { label: "Send backward", action: () => L().moveBy(-1), enabled: has },
+    "-",
+    { label: "Merge down", shortcut: "Ctrl+E", action: () => L().mergeDown(), enabled: () => !!doc && doc.active > 0 },
+    { label: "Merge visible", action: () => L().mergeVisible(), enabled: () => !!doc?.hasLayers },
+    { label: "Flatten image", action: () => L().flatten(), enabled: () => !!doc?.hasLayers },
+  ] },
+  { label: "Select", items: [
+    { label: "All", shortcut: "Ctrl+A", action: () => P.selectAll(A), enabled: has },
+    { label: "Deselect", shortcut: "Ctrl+D", action: () => P.deselect(A), enabled: hasSel },
+    { label: "Inverse", shortcut: "Ctrl+Shift+I", action: () => P.invertSelection(A), enabled: has },
+    "-",
+    { label: "Copy to new layer", shortcut: "Ctrl+J", action: () => P.selectionToLayer(A, false, makeLayer), enabled: hasSel },
+    { label: "Cut to new layer", action: () => P.selectionToLayer(A, true, makeLayer), enabled: hasSel },
+  ] },
+  { label: "Filter", items: [
+    { label: "Filters…", action: () => selectTool("looks"), enabled: has },
+    { label: "Sharpen / Soften…", action: () => selectTool("adjust"), enabled: has },
+    { label: "Blur out / redact", action: () => selectTool("redact"), enabled: has },
+  ] },
+  { label: "View", items: [
+    { label: "Zoom in", shortcut: "+", action: () => view.zoomAt(1.25, view.cssW / 2, view.cssH / 2), enabled: has },
+    { label: "Zoom out", shortcut: "−", action: () => view.zoomAt(0.8, view.cssW / 2, view.cssH / 2), enabled: has },
+    { label: "Fit on screen", shortcut: "0", action: () => view.fit(), enabled: has },
+    { label: "Actual size (100%)", shortcut: "1", action: () => view.actualSize(), enabled: has },
+    "-",
+    { label: "Layers panel", shortcut: "L", action: () => showTab("layers"), enabled: has },
+  ] },
+  { label: "Help", items: [
+    { label: "Keyboard shortcuts", action: shortcutsDialog },
+    { label: "About Photocairn", action: aboutDialog },
+    { label: "Source code on GitHub", action: () => window.open("https://github.com/apopov04/photocairn", "_blank", "noopener") },
+  ] },
+]);
 
 // Debug/test hook (used by the automated browser tests).
 window.__photocairn = { open: openBlob, addLayer: addImageLayer, get doc() { return doc; }, view, selectTool };

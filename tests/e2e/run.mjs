@@ -4,7 +4,8 @@
 // Each line of a scenario file is a step: tool:<name>, clicktext:<label>,
 // drag:x1:y1:x2:y2 (fractions of the canvas), range:<index>:<value>,
 // waitfor:<js expr>, eval:<js expr>, key:<combo>, shot:<name>, wait:<ms>,
-// addlayer:<image path>, openfile:<path>, select:<css>:<value>. Set URL= to test a deployed copy.
+// addlayer:<image path>, openfile:<path>, select:<css>:<value>, menu:<Menu>:<Item>.
+// Set URL= to test a deployed copy.
 // Needs `npm i -D puppeteer-core`.
 import puppeteer from "puppeteer-core";
 import fs from "fs";
@@ -33,12 +34,27 @@ await shot("02-opened");
 const steps = (process.argv[2] ? fs.readFileSync(process.argv[2], "utf8") : "").split("\n").map((s) => s.trim()).filter(Boolean);
 for (const s of steps) { console.error("step", s);
   const [name, ...args] = s.split(":");
-  if (name === "tool") { await page.click(`#tools button[data-tool="${args[0]}"]`); await shot(`tool-${args[0]}`); }
+  if (name === "tool") {
+    await page.evaluate((t) => {
+      const b = document.querySelector(`#tools button[data-tool="${t}"]`);
+      if (b) b.click();
+      else if (t === "layers") document.querySelector('.side-tabs [data-tab="layers"]').click();
+      else window.__photocairn.selectTool(t);
+    }, args[0]);
+    await shot(`tool-${args[0]}`);
+  }
+  else if (name === "menu") { // menu:<Menu>:<Item>
+    await page.evaluate((m, it) => {
+      const btn = [...document.querySelectorAll("#menus .menu-btn")].find((b) => b.textContent === m);
+      btn.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      [...document.querySelectorAll(".menu-pop button")].find((b) => b.firstChild.textContent === it).click();
+    }, args[0], args.slice(1).join(":"));
+  }
   else if (name === "click") { await page.evaluate((sel) => document.querySelector(sel).click(), args.join(":")); }
-  else if (name === "clicktext") { await page.evaluate((t) => [...document.querySelectorAll("#panel button, dialog button")].find((b) => b.textContent.trim() === t).click(), args.join(":")); }
+  else if (name === "clicktext") { await page.evaluate((t) => [...document.querySelectorAll("#side button, dialog button")].find((b) => b.textContent.trim() === t || (b.getAttribute("aria-label") || "").startsWith(t)).click(), args.join(":")); }
   else if (name === "wait") { await new Promise((r) => setTimeout(r, +args[0])); }
   else if (name === "waitfor") { await page.waitForFunction(new Function(`return ${args.join(":")}`), { timeout: 200000, polling: 500 }); }
-  else if (name === "range") { await page.evaluate((i, v) => { const r = document.querySelectorAll("#panel input[type=range]")[+i]; r.value = v; r.dispatchEvent(new Event("input")); r.dispatchEvent(new Event("change")); }, args[0], args[1]); }
+  else if (name === "range") { await page.evaluate((i, v) => { const r = document.querySelectorAll("#side input[type=range]")[+i]; r.value = v; r.dispatchEvent(new Event("input")); r.dispatchEvent(new Event("change")); }, args[0], args[1]); }
   else if (name === "drag") { // drag:x1:y1:x2:y2 in fractions of the stage
     const r = await page.$eval("#stage-wrap", (e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; });
     const [x1, y1, x2, y2] = args.map(Number);

@@ -1,7 +1,7 @@
 addlayer:tests/e2e/sample.jpg
 range:0:70
-select:#panel select:screen
-clicktext:Pixels
+select:#side select:screen
+clicktext:Lock image pixels
 click:#btn-export
 wait:500
 clicktext:PSD
