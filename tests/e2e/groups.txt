@@ -1,0 +1,84 @@
+eval:[...document.querySelectorAll("#tools button[data-tool]")].map((b) => b.dataset.tool + (b.classList.contains("group") ? "*" : "")).join(" ")
+shot:G0-rail
+tool:fills
+eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=fills] span').textContent + " | " + document.querySelector('#tools [data-tool=fills]').title + " | segs: " + document.querySelectorAll("#panel .seg").length
+range:0:20
+click:#panel .swatch[data-v="#34c759"]
+tap:0.1:0.1
+key:g
+eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=fills] span').textContent + " | " + document.querySelector('#tools [data-tool=fills]').classList.contains("active") + " | " + localStorage.getItem("pc-fill-tool")
+clicktext:Transparent
+drag:0.2:0.9:0.8:0.6
+shot:G1-gradient
+key:g
+eval:document.querySelector("#side h2").textContent
+key:Shift+G
+eval:document.querySelector("#side h2").textContent
+key:k
+eval:document.querySelector("#side h2").textContent
+eval:document.querySelector('#tools [data-tool=fills]').dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 }))
+eval:[...document.querySelectorAll(".tool-flyout button")].map((b) => b.textContent + (b.classList.contains("on") ? "*" : "")).join(", ")
+shot:G2-fill-flyout
+eval:[...document.querySelectorAll(".tool-flyout button")].find((b) => b.textContent.startsWith("Gradient")).click()
+eval:document.querySelector("#side h2").textContent + " | " + JSON.parse(localStorage.getItem("pc-grad")).to
+tool:move
+key:g
+eval:document.querySelector("#side h2").textContent + " | remembered variant"
+key:u
+eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=shapes] span').textContent + " | fill box: " + !!document.querySelector("#panel input[type=checkbox]") + " | segs: " + document.querySelectorAll("#panel .seg").length
+key:u
+eval:document.querySelector("#side h2").textContent + " | fill box: " + !!document.querySelector("#panel input[type=checkbox]")
+key:u
+eval:document.querySelector("#side h2").textContent + " | fill box: " + !!document.querySelector("#panel input[type=checkbox]")
+key:u
+eval:document.querySelector("#side h2").textContent + " | fill box: " + !!document.querySelector("#panel input[type=checkbox]")
+tool:shape-ellipse
+click:#panel input[type=checkbox]
+drag:0.55:0.55:0.75:0.8
+tool:arrow
+eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=shapes]').getAttribute("aria-label") + " | " + localStorage.getItem("pc-shape-tool")
+drag:0.3:0.7:0.45:0.55
+tool:line
+drag:0.1:0.4:0.4:0.4
+shot:G3-shapes
+eval:document.querySelector('#tools [data-tool=shapes]').dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 }))
+eval:[...document.querySelectorAll(".tool-flyout button")].map((b) => b.textContent + (b.classList.contains("on") ? "*" : "")).join(", ")
+shot:G4-shapes-flyout
+key:Escape
+tool:redact
+eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=redact]').title + " | segs: " + document.querySelectorAll("#panel .seg").length + " | sliders: " + document.querySelectorAll("#panel input[type=range]").length
+drag:0.45:0.3:0.6:0.45
+tool:pixelate
+eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=redact] span').textContent + " | " + localStorage.getItem("pc-redact")
+drag:0.62:0.3:0.78:0.45
+eval:document.querySelector('#tools [data-tool=redact]').dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 }))
+eval:[...document.querySelectorAll(".tool-flyout button")].map((b) => b.textContent + (b.classList.contains("on") ? "*" : "")).join(", ")
+shot:G5-redact-flyout
+eval:[...document.querySelectorAll(".tool-flyout button")].find((b) => b.textContent.startsWith("Solid box")).click()
+eval:document.querySelector("#side h2").textContent + " | swatches: " + !!document.querySelector("#panel .swatches") + " | sliders: " + document.querySelectorAll("#panel input[type=range]").length
+click:#panel .swatch[data-v="#ff3b30"]
+drag:0.1:0.6:0.3:0.7
+shot:G6-redact
+tool:blur
+tool:box
+eval:document.querySelector("#panel .swatch.on")?.dataset.v + " | color kept"
+tool:select
+eval:document.querySelector("#side h2").textContent + " | segs: " + [...document.querySelectorAll("#panel .seg")].map((s) => s.textContent).join(" / ")
+clicktext:Add
+tool:lasso
+eval:document.querySelector("#side h2").textContent + " | mode: " + document.querySelector("#panel .seg .on").textContent
+tool:paint
+eval:document.querySelector("#side h2").textContent + " | segs: " + document.querySelectorAll("#panel .seg").length
+tool:eraser
+eval:document.querySelector("#side h2").textContent + " | segs: " + [...document.querySelectorAll("#panel .seg")].map((s) => s.textContent).join(" / ")
+menu:Help:Keyboard shortcuts
+shot:G7-help
+eval:[...document.querySelectorAll("dialog table.keys tr")].map((r) => r.textContent).filter((t) => /fill|shape|group|Bucket/i.test(t)).join(" ;; ")
+clicktext:Close
+eval:__photocairn.doc.undoStack.length
+eval:(() => { const b = document.querySelector('#tools [data-tool=redact]'); b.scrollIntoView({ inline: "center", block: "nearest" }); const r = b.getBoundingClientRect(); b.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch", button: 0, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2 })); return "pressed"; })()
+wait:600
+eval:(() => { const f = document.querySelector(".tool-flyout"); if (!f) return "no flyout"; const r = f.getBoundingClientRect(); return f.getAttribute("aria-label") + " | in view: " + (r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight); })()
+shot:G8-longpress
+eval:[...document.querySelectorAll(".tool-flyout button")].find((b) => b.textContent.startsWith("Blur")).click()
+eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=redact] span').textContent

@@ -4,7 +4,7 @@ eval:document.querySelector("#side h2").textContent + " | " + document.querySele
 range:0:24
 click:#panel .swatch[data-v="#ff3b30"]
 drag:0.2:0.3:0.8:0.3
-clicktext:Pen
+tool:pen
 eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=paint] span').textContent
 click:#panel .swatch[data-v="#0a84ff"]
 path:0.2:0.45:0.3:0.5:0.4:0.42:0.5:0.52:0.6:0.44:0.7:0.5:0.8:0.45

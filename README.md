@@ -21,6 +21,8 @@ The layout will feel familiar if you've used Photoshop:
 
 On phones, the tools sit along the bottom and the options and layers share a tabbed sheet.
 
+Related tools (brushes, selections, fills, shapes, blur out) share one toolbar button, marked with a small corner triangle. The button shows the tool in use; right-click (or long-press) it to pick another, or press its key again to cycle. The options panel then shows just that tool's settings.
+
 **Files**
 - Open PNG, JPG, WebP, AVIF, GIF and **PSD** (with layers). You can also drag & drop, paste from the clipboard, or start a **new blank image** (with presets; white, transparent or colored background).
 - Save as PNG, JPG, WebP or **layered PSD** (opens in Photoshop, GIMP and Photopea), with quality and size sliders and a live file-size estimate, or copy to the clipboard. **Location and camera data (EXIF) are always removed.**
@@ -42,23 +44,24 @@ On phones, the tools sit along the bottom and the options and layers share a tab
 
 **Edit**
 - **Move** (V): drag a layer, or just the selected pixels. Arrow keys nudge.
-- **Select** (M): rectangle and ellipse marquee with add, subtract and intersect. Also select all, invert, crop to selection, copy or cut to a new layer, fill, and delete. Painting, fills, adjustments and filters stay inside the selection.
+- **Select** (M): rectangle, ellipse, lasso, polygon and magic wand (W) share one toolbar button; pick one by right-clicking (or long-pressing) the button, or with M / Shift+M. New, add, subtract and intersect modes. Also select all, invert, crop to selection, copy or cut to a new layer, fill, and delete. Painting, fills, adjustments and filters stay inside the selection.
 - **Free transform** (Ctrl+T): scale, rotate, flip and move a layer or selection, using handles or exact numbers.
 - **Crop**: free or preset ratios, plus straighten.
 - **Rotate & flip**: 90° steps, horizontal/vertical flip or any angle, applied to the whole image or one layer.
 - **Resize**: image size (scale), plus **canvas size** with an anchor to add space around the image without scaling it.
 
 **Paint**
-- **Brush tools** (B) share one toolbar button; switch type in the tool options, by right-clicking (or long-pressing) the button, or with B / Shift+B:
+- **Brush tools** (B, Shift+B cycles):
   - **Brush**: size, hardness, opacity and color.
   - **Pencil** (N): hard, pixel-exact lines.
   - **Pen**: smooth, steadied ink lines for writing and signatures.
   - **Highlighter**: flat, see-through chisel tip that darkens what is under it.
 - **Eraser** (E): soft or block.
-- **Paint bucket** (K): tolerance, contiguous or global fill, and sample one layer or all layers.
-- **Gradient** (G): linear or radial, fading to the second color or to transparent.
+- **Fill tools** (G, Shift+G cycles):
+  - **Paint bucket** (K): tolerance, contiguous or global fill, and sample one layer or all layers.
+  - **Gradient**: linear or radial, fading to the second color or to transparent.
 - **Eyedropper** (I): average 1, 3×3 or 5×5 pixels.
-- **Shapes** (U): line, arrow, rectangle, ellipse (outlined or filled).
+- **Shapes** (U, Shift+U cycles): **Line**, **Arrow**, **Rectangle** and **Ellipse** (outlined or filled).
 - **Text** (T): click to place text or drag to draw a text box, then drag to move it and drag the side handles to set the wrapping width. Font, font size, weight, italic, alignment, color, outline and background color. Each text is an editable text layer: click it with the Text tool (or double-click it) to change it later. Painting or filtering a text layer turns it into pixels.
 - Main and second colors in the toolbar. X swaps them, D resets to black and white. Alt+click with the brush picks a color.
 
@@ -71,7 +74,7 @@ On phones, the tools sit along the bottom and the options and layers share a tab
 - **Remove background** with AI that runs on your device. *Fast* uses a 4.6 MB model and *Best quality* a 44 MB one. Afterwards you can pick a solid or blurred background and touch up with Erase/Restore brushes.
 - **Adjust**: brightness, contrast, exposure, highlights, shadows, saturation, warmth, tint, sharpen and soften.
 - **Filters**: Mono, Sepia, Vivid, Warm, Cool, Fade, Noir, Vintage and Invert, with a strength slider.
-- **Blur out** faces, plates and private details by blurring, pixelating or covering them with a solid box.
+- **Blur out** faces, plates and private details: **Blur**, **Pixelate** and **Solid box** share one toolbar button.
 - **Corners & border**: rounded corners, circle crop, and borders.
 
 **Everywhere**
@@ -90,16 +93,17 @@ On phones, the tools sit along the bottom and the options and layers share a tab
 
 **Tools**
 - `V`: Move
-- `M`: Select
+- `M`: Select tools (press again, or `Shift+M`, for Ellipse, Lasso, Polygon, Magic wand)
+- `W`: Magic wand
 - `Ctrl+T`: Transform
 - `C`: Crop
 - `B`: Brush tools (press again, or `Shift+B`, for Pencil, Pen, Highlighter)
 - `N`: Pencil
 - `E`: Eraser
+- `G`: Fill tools (press again, or `Shift+G`, to switch between Paint bucket and Gradient)
 - `K`: Paint bucket
-- `G`: Gradient
 - `I`: Eyedropper
-- `U`: Shapes
+- `U`: Shapes (press again, or `Shift+U`, for Line, Arrow, Rectangle, Ellipse)
 - `T`: Text
 - `L`: Layers
 

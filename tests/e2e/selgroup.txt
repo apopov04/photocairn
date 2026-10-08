@@ -1,6 +1,6 @@
 eval:localStorage.setItem("pc-sel", "rect")
 tool:select
-eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=select]').title + " | " + document.querySelector("#panel .seg .on")?.textContent
+eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=select]').title + " | " + document.querySelector("#side h2").textContent
 shot:S0-rail
 eval:document.querySelector('#tools [data-tool=select]').dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 }))
 shot:S1-flyout
@@ -9,30 +9,30 @@ key:ArrowDown
 key:ArrowDown
 eval:document.activeElement.textContent
 eval:[...document.querySelectorAll(".tool-flyout button")].find((b) => b.textContent.startsWith("Lasso")).click()
-eval:!!document.querySelector(".tool-flyout") + " | " + document.querySelector('#tools [data-tool=select] span').textContent + " | " + document.querySelector("#panel .seg .on")?.textContent + " | " + localStorage.getItem("pc-sel")
+eval:!!document.querySelector(".tool-flyout") + " | " + document.querySelector('#tools [data-tool=select] span').textContent + " | " + document.querySelector("#side h2").textContent + " | " + localStorage.getItem("pc-sel")
 path:0.3:0.3:0.6:0.25:0.65:0.6:0.35:0.65:0.3:0.3
 eval:__photocairn.doc.selection ? "selected" : "none"
-clicktext:Polygon
+tool:polygon
 eval:document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + localStorage.getItem("pc-sel")
 key:m
-eval:document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector("#panel .seg .on")?.textContent
+eval:document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector("#side h2").textContent
 key:Shift+M
-eval:document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector("#panel .seg .on")?.textContent
+eval:document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector("#side h2").textContent
 key:m
-eval:document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector("#panel .seg .on")?.textContent
+eval:document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector("#side h2").textContent
 tool:move
 key:m
 eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector('#tools [data-tool=select]').classList.contains("active")
 key:Escape
 tool:move
 key:w
-eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector("#panel .seg .on")?.textContent
+eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector("#side h2").textContent
 tap:0.5:0.5
 eval:__photocairn.doc.selection ? "selected" : "none"
 key:Escape
-clicktext:Ellipse
+tool:ellipse
 key:w
-eval:document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector("#panel .seg .on")?.textContent
+eval:document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector("#side h2").textContent
 key:l
 eval:document.querySelector("#side").dataset.tab
 tool:select
@@ -46,11 +46,11 @@ eval:document.querySelector(".tool-flyout")?.getAttribute("aria-label") + " | " 
 key:Escape
 eval:!!document.querySelector(".tool-flyout")
 tool:rect
-eval:document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector("#panel .seg .on")?.textContent
+eval:document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector("#side h2").textContent
 drag:0.2:0.2:0.6:0.6
 eval:__photocairn.doc.selection ? "selected" : "none"
 key:b
 eval:document.querySelector("#side h2").textContent
 key:m
-eval:document.querySelector("#side h2").textContent + " | " + document.querySelector("#panel .seg .on")?.textContent
+eval:document.querySelector("#side h2").textContent + " | " + document.querySelector("#side h2").textContent
 shot:S3-done

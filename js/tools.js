@@ -642,11 +642,20 @@ export function looksTool(A) {
 /* Blur out (redact)                                                           */
 /* -------------------------------------------------------------------------- */
 
-export function redactTool(A) {
-  let mode = localStorage.getItem("pc-redact") || "blur", strength = 60, color = "#000000", drag = null;
-  const colorRow = swatches({ value: color, onChange: (v) => { color = v; } });
-  colorRow.hidden = mode !== "box";
-  const warn = h("p", { class: "note" }, "For passwords, card numbers or IDs, use Solid box. Blur and pixelation can sometimes be reversed.");
+/** Variants of the Blur out tool group, which share one rail button. */
+export const REDACT_MODES = [
+  { value: "blur", label: "Blur" },
+  { value: "pixelate", label: "Pixelate" },
+  { value: "box", label: "Solid box" },
+];
+
+// Strength and box color carry over when switching between the variants (this session only).
+let redactStrength = 60, redactColor = "#000000";
+
+export function redactTool(A, mode = "blur") {
+  if (!REDACT_MODES.some((m) => m.value === mode)) mode = "blur";
+  let drag = null;
+  const box = mode === "box";
   function applyRect(r) {
     r = { x: Math.max(0, Math.floor(r.x)), y: Math.max(0, Math.floor(r.y)), w: Math.ceil(r.w), h: Math.ceil(r.h) };
     r.w = Math.min(r.w, A.doc.width - r.x); r.h = Math.min(r.h, A.doc.height - r.y);
@@ -654,27 +663,25 @@ export function redactTool(A) {
     if (!guard(A)) return;
     A.doc.commit((c) => {
       const x = ctx2d(c);
-      if (mode === "box") { x.fillStyle = color; x.fillRect(r.x, r.y, r.w, r.h); return; }
+      if (mode === "box") { x.fillStyle = redactColor; x.fillRect(r.x, r.y, r.w, r.h); return; }
       const pad = mode === "blur" ? Math.ceil(Math.min(r.w, r.h) * 0.6) : 0;
       const sx = Math.max(0, r.x - pad), sy = Math.max(0, r.y - pad);
       const sw = Math.min(c.width, r.x + r.w + pad) - sx, sh = Math.min(c.height, r.y + r.h + pad) - sy;
       const img = x.getImageData(sx, sy, sw, sh);
-      const k = strength / 100;
+      const k = redactStrength / 100;
       if (mode === "pixelate") ops.pixelateRect(img, r.x - sx, r.y - sy, r.w, r.h, Math.max(4, Math.min(r.w, r.h) * (0.05 + 0.3 * k)));
       else ops.blurRect(img, r.x - sx, r.y - sy, r.w, r.h, Math.max(3, Math.min(r.w, r.h) * (0.05 + 0.25 * k)));
       x.putImageData(img, sx, sy);
     });
   }
   return {
-    title: "Blur out",
+    title: REDACT_MODES.find((m) => m.value === mode).label,
     body: [
-      h("p", { class: "hint" }, "Drag over faces, names, number plates or anything private."),
-      seg([{ value: "blur", label: "Blur" }, { value: "pixelate", label: "Pixelate" }, { value: "box", label: "Solid box" }], mode, (v) => {
-        mode = v; localStorage.setItem("pc-redact", v); colorRow.hidden = v !== "box";
-      }),
-      slider({ label: "Strength", min: 10, max: 100, value: strength, onInput: (v) => { strength = v; } }),
-      colorRow, warn,
-    ],
+      h("p", { class: "hint" }, `Drag over faces, names, number plates or anything private to ${box ? "cover it" : mode === "blur" ? "blur it" : "pixelate it"}.`),
+      box ? swatches({ value: redactColor, onChange: (v) => { redactColor = v; } })
+        : slider({ label: "Strength", min: 10, max: 100, value: redactStrength, onInput: (v) => { redactStrength = v; } }),
+      box ? null : h("p", { class: "note" }, "For passwords, card numbers or IDs, use Solid box (right-click or long-press this tool). Blur and pixelation can sometimes be reversed."),
+    ].filter(Boolean),
     cursor: "crosshair",
     wantsPointer: true,
     down(p) { drag = { a: p, b: p }; },

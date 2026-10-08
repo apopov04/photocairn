@@ -288,33 +288,31 @@ addEventListener("paste", (e) => {
 
 /* ---------------------------------- tools ---------------------------------- */
 
+// Tool groups (paint, select, fills, shapes, redact) get their current variant
+// as the second argument; see toolGroup() below.
 const FACTORIES = {
   cutout: T.cutoutTool, crop: T.cropTool, resize: T.resizeTool, adjust: T.adjustTool,
   looks: T.looksTool, redact: T.redactTool, text: T.textTool, frame: T.frameTool,
   layers: T.layersTool, rotate: T.rotateTool,
-  move: P.moveTool, select: (a) => P.selectTool(a, makeLayer, (v) => selGroup.set(v)), transform: P.transformTool,
-  paint: (a) => P.paintTool(a, brushGroup.value, selectTool), eraser: (a) => P.paintTool(a, "eraser"),
-  shapes: P.shapesTool, fill: P.fillTool, gradient: P.gradientTool, eyedropper: P.eyedropperTool,
+  move: P.moveTool, select: (a, v) => P.selectTool(a, makeLayer, v), transform: P.transformTool,
+  paint: P.paintTool, eraser: (a) => P.paintTool(a, "eraser"),
+  shapes: P.shapesTool, fills: (a, v) => (v === "gradient" ? P.gradientTool(a) : P.fillTool(a)), eyedropper: P.eyedropperTool,
   export: exportTool,
 };
 
 // Rail tools stay selected (like Photoshop); "panel" tools opened from the
 // menus (Adjust, Resize...) return to the previous rail tool when closed.
-const RAIL_TOOLS = new Set(["move", "select", "crop", "cutout", "paint", "eraser", "fill", "gradient", "eyedropper", "shapes", "text", "redact"]);
+const RAIL_TOOLS = new Set(["move", "select", "crop", "cutout", "paint", "eraser", "fills", "eyedropper", "shapes", "text", "redact"]);
 let railTool = "move";
 
 function selectTool(name, toggle = false) {
   if (!doc) return;
   if (!name) name = railTool;
   const grp = GROUPS.find((g) => g.has(name));
-  if (grp) { // a variant of a tool group, e.g. "pen" or "lasso"
+  if (grp) { // a variant of a tool group, e.g. "pen" or "lasso": rebuild the panel for it
     const v = name;
     name = grp.tool;
-    if (v !== grp.value) {
-      grp.set(v);
-      if (toolName === name && tool?.setKind) { tool.setKind(v); showTab("props"); return; }
-      toggle = true;
-    }
+    if (v !== grp.value) { grp.set(v); toggle = true; }
   }
   if (name === toolName && !toggle) { showTab("props"); return; }
   if (tool) { tool.cleanup?.(); }
@@ -325,7 +323,7 @@ function selectTool(name, toggle = false) {
   panel.replaceChildren();
   toolName = name;
   if (RAIL_TOOLS.has(name)) railTool = name;
-  tool = FACTORIES[name](A);
+  tool = FACTORIES[name](A, GROUPS.find((g) => g.tool === name)?.value);
   if (tool.cursor) A.setCursor(tool.cursor);
   if (tool.cursorStyle) A.setCursorStyle(tool.cursorStyle);
   layerNote = LAYER_TOOLS.has(name) ? h("p", { class: "layer-note" }) : null;
@@ -341,7 +339,7 @@ function selectTool(name, toggle = false) {
 }
 
 // Tools that edit only the selected layer (others act on the whole image).
-const LAYER_TOOLS = new Set(["cutout", "adjust", "looks", "redact", "move", "transform", "paint", "eraser", "shapes", "fill", "gradient"]);
+const LAYER_TOOLS = new Set(["cutout", "adjust", "looks", "redact", "move", "transform", "paint", "eraser", "shapes", "fills"]);
 let layerNote = null;
 function updateLayerNote() {
   if (!layerNote || !doc) return;
@@ -364,25 +362,28 @@ $("#tools").addEventListener("click", (e) => {
 
 // A group's rail button shows its current variant (icon, label, tooltip) and a
 // corner mark; right-click or long-press opens a flyout to swap variants. Its
-// shortcut key selects the group, and pressing it again (or with Shift) cycles.
-// selectTool(variant) switches variant: tools with setKind() switch in place,
-// others are rebuilt.
+// shortcut key (if any) selects the group, and pressing it again (or with
+// Shift) cycles. Each variant is a separate tool: selectTool(variant) rebuilds
+// the panel with that variant's settings, so the right-side panel never has
+// its own switcher. Variant values must be unique across all groups, and
+// differ from the group's own tool name (which means "the current variant").
+// Variants: { value, label, short?: rail label, key?: own shortcut }.
 const GROUPS = [];
-function toolGroup({ tool, name, variants, icons, storage, key, tip = "" }) {
+function toolGroup({ tool, name, variants, icons, storage, key = "", tip = "", initial }) {
   const btn = $(`#tools button[data-tool="${tool}"]`);
   const keys = variants.map((v) => v.value);
   const saved = localStorage.getItem(storage);
   const g = {
     tool, name, variants, icons, btn, key,
-    value: keys.includes(saved) ? saved : keys[0],
+    value: keys.includes(saved) ? saved : keys.includes(initial) ? initial : keys[0],
     has: (v) => keys.includes(v),
     next: () => keys[(keys.indexOf(g.value) + 1) % keys.length],
     set(v) {
       g.value = v;
       localStorage.setItem(storage, v);
-      const it = variants.find((x) => x.value === v);
-      btn.innerHTML = `<svg viewBox="0 0 24 24">${icons[v]}</svg><span>${it.label}</span>`;
-      btn.title = `${tip}${it.label} (${it.key || key}). ${key} again for the next one; right-click or long-press for more`;
+      const it = variants.find((x) => x.value === v), k = it.key || key;
+      btn.innerHTML = `<svg viewBox="0 0 24 24">${icons[v]}</svg><span>${it.short || it.label}</span>`;
+      btn.title = `${tip}${it.label}${k ? ` (${k})` : ""}. ${key ? `${key} cycles through ${name.toLowerCase()}. ` : ""}Right-click or long-press to choose.`;
       btn.setAttribute("aria-label", tip + it.label);
     },
   };
@@ -439,7 +440,7 @@ addEventListener("resize", closeFlyout);
 $("#tools").addEventListener("scroll", closeFlyout);
 
 // Brush group: brush, pencil, pen, highlighter.
-const brushGroup = toolGroup({
+toolGroup({
   tool: "paint", name: "Brush tools", variants: P.BRUSHES, storage: "pc-brush-tool", key: "B",
   icons: {
     brush: '<path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L11 15.8 8.2 13z"/><path d="M7 14c-2 0-3 1.5-3 3 0 1.2-.8 2.2-2 3 3 1 7 .5 8-3z"/>',
@@ -449,8 +450,8 @@ const brushGroup = toolGroup({
   },
 });
 
-// Select group: rectangle, ellipse, lasso, polygon, magic wand (stored as pc-sel, read by the tool).
-const selGroup = toolGroup({
+// Select group: rectangle, ellipse, lasso, polygon, magic wand (stored as pc-sel, as before).
+toolGroup({
   tool: "select", name: "Selection tools", variants: P.SEL_KINDS, storage: "pc-sel", key: "M", tip: "Select: ",
   icons: {
     rect: '<rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="3 3"/>',
@@ -458,6 +459,37 @@ const selGroup = toolGroup({
     lasso: '<path d="M8.5 13.8C6.4 12.9 5 11.1 5 9c0-3 3.6-5.5 8-5.5S21 6 21 9s-3.6 5.5-8 5.5c-1 0-2-.1-2.9-.4" stroke-dasharray="3 2.6"/><circle cx="9.2" cy="14.3" r="1.3"/><path d="M8.4 15.5c-1.2 1.4-2.9 2.2-2.9 3.8 0 1.3 1.2 2 2.5 1.5"/>',
     polygon: '<path d="M5 6l11-2 4 9-7 7-9-4z" stroke-dasharray="3 2.6"/><circle cx="5" cy="6" r=".9"/><circle cx="16" cy="4" r=".9"/><circle cx="20" cy="13" r=".9"/><circle cx="13" cy="20" r=".9"/><circle cx="4" cy="16" r=".9"/>',
     wand: '<path d="M3 21l11-11"/><path d="M12.5 8.5l3 3"/><path d="M17 3v3M17 12v3M11 9h0M20 9h3M13.5 5.5l-1-1M20.5 5.5l1-1M20.5 12.5l1 1"/>',
+  },
+});
+
+// Fill group: paint bucket and gradient.
+toolGroup({
+  tool: "fills", name: "Fill tools", variants: P.FILLS, storage: "pc-fill-tool", key: "G",
+  icons: {
+    fill: '<path d="M5 11l7-7 7 7-7 7z"/><path d="M5 11h14"/><path d="M20 15s2 2.5 2 3.5a2 2 0 0 1-4 0c0-1 2-3.5 2-3.5z"/>',
+    gradient: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18" opacity=".5"/><path d="M9 3v18" opacity=".3"/>',
+  },
+});
+
+// Shapes group: line, arrow, rectangle, ellipse (rectangle by default, or the kind last used before shapes became a group).
+toolGroup({
+  tool: "shapes", name: "Shapes", variants: P.SHAPES, storage: "pc-shape-tool", key: "U",
+  initial: ((k) => (k === "line" || k === "arrow" ? k : `shape-${k || "rect"}`))(JSON.parse(localStorage.getItem("pc-shapes") || "null")?.kind),
+  icons: {
+    line: '<path d="M4 20L20 4"/>',
+    arrow: '<path d="M4 20L20 4"/><path d="M11 4h9v9"/>',
+    "shape-rect": '<rect x="3.5" y="5.5" width="17" height="13" rx="1"/>',
+    "shape-ellipse": '<ellipse cx="12" cy="12" rx="9" ry="6.5"/>',
+  },
+});
+
+// Redact group: blur, pixelate, solid box (stored as pc-redact, as before).
+toolGroup({
+  tool: "redact", name: "Blur out tools", variants: T.REDACT_MODES, storage: "pc-redact", tip: "Blur out: ",
+  icons: {
+    blur: '<circle cx="12" cy="12" r="8" opacity=".35"/><circle cx="12" cy="12" r="5" opacity=".65"/><circle cx="12" cy="12" r="2"/>',
+    pixelate: '<rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 9h6V3M9 9v6h6V9h6M3 15h6v6M15 15v6M15 15h6"/><rect x="9" y="3" width="6" height="6" fill="currentColor" opacity=".35"/><rect x="3" y="9" width="6" height="6" fill="currentColor" opacity=".35"/><rect x="15" y="9" width="6" height="6" fill="currentColor" opacity=".35"/><rect x="9" y="15" width="6" height="6" fill="currentColor" opacity=".35"/>',
+    box: '<rect x="3" y="8" width="18" height="8" rx="1" fill="currentColor"/>',
   },
 });
 
@@ -626,10 +658,10 @@ addEventListener("keydown", (e) => {
   if (mod && k === "t") { e.preventDefault(); selectTool("transform", false); return; }
   if ((e.key === "Delete" || e.key === "Backspace") && !mod) { e.preventDefault(); P.clearSelection(A); return; }
   if (!mod && !e.altKey) {
-    // B / M select the brush / select group; pressing again (or with Shift) cycles through its variants.
-    const grp = GROUPS.find((g) => g.key.toLowerCase() === k);
+    // B / M / G / U select the brush / select / fill / shapes group; pressing again (or with Shift) cycles through its variants.
+    const grp = GROUPS.find((g) => g.key && g.key.toLowerCase() === k);
     if (grp) { selectTool(toolName === grp.tool || e.shiftKey ? grp.next() : grp.tool, false); return; }
-    const shortcut = { v: "move", n: "pencil", w: "wand", e: "eraser", i: "eyedropper", k: "fill", g: "gradient", u: "shapes", t: "text", c: "crop" }[k];
+    const shortcut = { v: "move", n: "pencil", w: "wand", e: "eraser", i: "eyedropper", k: "fill", t: "text", c: "crop" }[k];
     if (shortcut) { selectTool(shortcut, false); return; }
     if (k === "l") { showTab("layers"); return; }
     if (k === "x") { swapColors(); return; }
@@ -798,8 +830,10 @@ function openCanvasSize() {
 
 function shortcutsDialog() {
   const rows = [
-    ["Move / Select / Crop", "V / M / C"], ["Next selection type (Ellipse, Lasso…)", "M again / Shift+M"], ["Magic wand", "W"], ["Brush tools / Pencil / Eraser", "B / N / E"], ["Next brush tool (Pen, Highlighter…)", "B again / Shift+B"], ["Bucket / Gradient / Eyedropper", "K / G / I"],
-    ["Shapes / Text", "U / T"], ["Free transform", "Ctrl+T"], ["Swap / reset colors", "X / D"], ["Brush size", "[ / ]"],
+    ["Move / Select / Crop", "V / M / C"], ["Next selection tool (Ellipse, Lasso…)", "M again / Shift+M"], ["Magic wand", "W"], ["Brush tools / Pencil / Eraser", "B / N / E"], ["Next brush tool (Pen, Highlighter…)", "B again / Shift+B"],
+    ["Fill tools / Paint bucket", "G / K"], ["Next fill tool (Bucket, Gradient)", "G again / Shift+G"], ["Eyedropper", "I"],
+    ["Shapes / Text", "U / T"], ["Next shape (Line, Arrow, Rectangle, Ellipse)", "U again / Shift+U"],
+    ["Other tools in a toolbar group", "Right-click or long-press it"], ["Free transform", "Ctrl+T"], ["Swap / reset colors", "X / D"], ["Brush size", "[ / ]"],
     ["Select all / Deselect / Invert", "Ctrl+A / Ctrl+D / Ctrl+Shift+I"], ["Copy / Cut / Paste", "Ctrl+C / Ctrl+X / Ctrl+V"],
     ["Selection to new layer", "Ctrl+J"], ["New layer / Merge down", "Ctrl+Shift+N / Ctrl+E"], ["Delete selected pixels", "Delete"],
     ["Undo / Redo", "Ctrl+Z / Ctrl+Shift+Z"], ["Open / Save", "Ctrl+O / Ctrl+S"], ["Zoom / Fit / 100%", "+ − / 0 / 1"],

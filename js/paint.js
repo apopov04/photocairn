@@ -1,7 +1,7 @@
 // Painting and selection tools: brush group (brush, pencil, pen, highlighter),
-// eraser, shapes, paint bucket,
-// gradient, eyedropper, selection (marquee, lasso, magic wand), move and
-// free transform.
+// eraser, shapes group (line, arrow, rectangle, ellipse), fill group (paint
+// bucket, gradient), eyedropper, selection group (marquee, lasso, polygon,
+// magic wand), move and free transform.
 //
 // Every pixel edit goes through applyPaint()/withinSelection(), which honour
 // the current selection and the layer's "lock transparent pixels" setting.
@@ -180,11 +180,8 @@ const HINTS = {
   highlighter: "Flat, see-through ink that darkens what is under it, like a real highlighter.",
 };
 
-/**
- * Brush-group variants and the eraser share one implementation.
- * swap(variant) switches the brush group to another variant.
- */
-export function paintTool(A, kind, swap) {
+/** Brush-group variants and the eraser share one implementation. */
+export function paintTool(A, kind = "brush") {
   const key = `pc-${kind}`;
   const saved = JSON.parse(localStorage.getItem(key) || "null") || {};
   const m = minSide(A.doc);
@@ -209,7 +206,6 @@ export function paintTool(A, kind, swap) {
     : chisel ? Object.assign(swatches({ value: o.color, onChange: (v) => { o.color = v; save(); } }), { sync() {} })
     : colorRow(A);
   const modeSeg = kind === "eraser" ? seg([{ value: "soft", label: "Brush" }, { value: "block", label: "Block" }], o.block ? "block" : "soft", (v) => { o.block = v === "block"; hardS.hidden = !hasHardness(); save(); }) : null;
-  const typeSeg = swap ? seg(BRUSHES.map((b) => ({ value: b.value, label: b.label })), kind, swap) : null;
   hardS.hidden = !hasHardness();
   const paintOpts = () => ({ opacity: o.opacity / 100, erase: kind === "eraser", blend: chisel ? "multiply" : "source-over" });
 
@@ -222,7 +218,7 @@ export function paintTool(A, kind, swap) {
   return {
     title: kind === "eraser" ? "Eraser" : BRUSHES.find((b) => b.value === kind).label,
     body: [
-      typeSeg, modeSeg,
+      modeSeg,
       sizeS, hardS, opS,
       colors,
       h("p", { class: "hint" }, kind === "eraser"
@@ -300,9 +296,20 @@ function shapePath(x, kind, a, b, width) {
   }
 }
 
-export function shapesTool(A) {
+/** Variants of the Shapes tool group (values are prefixed where they'd clash with selection kinds). */
+export const SHAPES = [
+  { value: "line", label: "Line" },
+  { value: "arrow", label: "Arrow" },
+  { value: "shape-rect", label: "Rectangle" },
+  { value: "shape-ellipse", label: "Ellipse" },
+];
+
+export function shapesTool(A, variant = "shape-rect") {
+  const sv = SHAPES.find((s) => s.value === variant) || SHAPES[2];
+  const kind = sv.value.replace("shape-", ""), closed = kind === "rect" || kind === "ellipse";
+  // Width, opacity and "filled" are shared by all shapes; `kind` is kept for older versions.
   const saved = JSON.parse(localStorage.getItem("pc-shapes") || "null") || {};
-  const o = { kind: ["line", "arrow", "rect", "ellipse"].includes(saved.kind) ? saved.kind : "rect", size: saved.size || Math.max(2, Math.round(minSide(A.doc) / 160)), fill: !!saved.fill, opacity: saved.opacity ?? 100 };
+  const o = { kind, size: saved.size || Math.max(2, Math.round(minSide(A.doc) / 160)), fill: !!saved.fill, opacity: saved.opacity ?? 100 };
   const save = () => localStorage.setItem("pc-shapes", JSON.stringify(o));
   let g = null;
   const colors = colorRow(A);
@@ -317,18 +324,14 @@ export function shapesTool(A) {
   };
   const throttled = frameThrottle(() => g && A.setSource(render()));
   return {
-    title: "Shapes",
+    title: sv.label,
     body: [
-      seg([
-        { value: "line", label: "Line" }, { value: "arrow", label: "Arrow" }, { value: "rect", label: "Rectangle" },
-        { value: "ellipse", label: "Ellipse" },
-      ], o.kind, (v) => { o.kind = v; save(); }),
       colors,
       slider({ label: "Line width", min: 1, max: Math.max(40, Math.round(minSide(A.doc) / 12)), value: o.size, format: (v) => `${v} px`, onInput: (v) => { o.size = v; save(); } }),
       slider({ label: "Opacity", min: 1, max: 100, value: o.opacity, format: (v) => `${v}%`, onInput: (v) => { o.opacity = v; save(); } }),
-      h("label", { class: "checkbox" }, fillBox, "Filled (rectangle & ellipse)"),
-      h("p", { class: "hint" }, "Hold Shift for 45° lines and perfect squares or circles."),
-    ],
+      closed ? h("label", { class: "checkbox" }, fillBox, "Filled") : null,
+      h("p", { class: "hint" }, closed ? `Drag to draw. Hold Shift for a perfect ${kind === "rect" ? "square" : "circle"}.` : "Drag to draw. Hold Shift for 45° angles."),
+    ].filter(Boolean),
     cursor: "crosshair",
     wantsPointer: true,
     onColorChange() { colors.sync(); },
@@ -398,6 +401,12 @@ function maskCanvas(mask, w, hgt) {
   c.getContext("2d").putImageData(img, 0, 0);
   return c;
 }
+
+/** Variants of the fill tool group, which share one rail button (G cycles, K jumps to the bucket). */
+export const FILLS = [
+  { value: "fill", label: "Paint bucket", short: "Bucket", key: "K" },
+  { value: "gradient", label: "Gradient", key: "G" },
+];
 
 export function fillTool(A) {
   const saved = JSON.parse(localStorage.getItem("pc-fill") || "null") || {};
@@ -642,16 +651,20 @@ export const SEL_KINDS = [
   { value: "wand", label: "Magic wand", title: "Click a color to select similar pixels (W)", key: "W" },
 ];
 
-/** onKind(kind) is called when the kind changes, so the rail button can follow. */
-export function selectTool(A, makeLayer, onKind) {
-  let kind = localStorage.getItem("pc-sel") || "rect", mode = "new", drag = null, poly = null, hover = null;
-  if (!SEL_KINDS.some((k) => k.value === kind)) kind = "rect";
+// The selection mode outlives switching between selection tools (this session only).
+let selMode = "new";
+
+/** kind: one of SEL_KINDS (each is its own tool on the Select rail button). */
+export function selectTool(A, makeLayer, kind = "rect") {
+  let drag = null, poly = null, hover = null;
+  const k = SEL_KINDS.find((x) => x.value === kind) || SEL_KINDS[0];
+  kind = k.value;
   const savedWand = JSON.parse(localStorage.getItem("pc-wand") || "null") || {};
   const wand = { tolerance: savedWand.tolerance ?? 12, contiguous: savedWand.contiguous ?? true, all: !!savedWand.all };
   const saveWand = () => localStorage.setItem("pc-wand", JSON.stringify(wand));
   const modeSeg = seg([
     { value: "new", label: "New" }, { value: "add", label: "Add" }, { value: "subtract", label: "Subtract" }, { value: "intersect", label: "Intersect" },
-  ], mode, (v) => { mode = v; });
+  ], selMode, (v) => { selMode = v; });
   const has = () => !!A.doc.selection;
   const actions = h("div", { class: "layer-actions" });
   const sync = () => {
@@ -678,15 +691,9 @@ export function selectTool(A, makeLayer, onKind) {
     slider({ label: "Tolerance", min: 0, max: 100, value: wand.tolerance, onInput: (v) => { wand.tolerance = v; saveWand(); } }),
     h("label", { class: "checkbox" }, h("input", { type: "checkbox", checked: wand.contiguous, onchange: (e) => { wand.contiguous = e.target.checked; saveWand(); } }), "Contiguous (only connected areas)"),
     h("label", { class: "checkbox" }, h("input", { type: "checkbox", checked: wand.all, onchange: (e) => { wand.all = e.target.checked; saveWand(); } }), "Sample all layers"));
-  const showKind = () => {
-    hint.textContent = `${HINTS[kind]} Hold Shift to add, Alt to subtract. Brushes, fills, adjustments and filters then only affect the selected area.`;
-    wandOpts.hidden = kind !== "wand";
-  };
-  showKind();
-  const setKind = (v) => { kind = v; poly = null; drag = null; localStorage.setItem("pc-sel", v); kindSeg.set(v); showKind(); onKind?.(v); A.redraw(); };
-  const kindSeg = seg(SEL_KINDS, kind, setKind);
+  hint.textContent = `${HINTS[kind]} Hold Shift to add, Alt to subtract. Brushes, fills, adjustments and filters then only affect the selected area.`;
   let lastClick = { t: 0, p: null };
-  const opFor = (e) => (e?.shiftKey && e?.altKey ? "intersect" : e?.shiftKey ? "add" : e?.altKey ? "subtract" : mode);
+  const opFor = (e) => (e?.shiftKey && e?.altKey ? "intersect" : e?.shiftKey ? "add" : e?.altKey ? "subtract" : selMode);
   const finishPoly = () => {
     const p = poly; poly = null; hover = null;
     if (p && p.pts.length >= 3) selectShape(A, { kind: "poly", pts: p.pts }, p.op);
@@ -695,14 +702,13 @@ export function selectTool(A, makeLayer, onKind) {
   const near = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) * A.view.zoom < 8;
   const polyArea = (pts) => Math.abs(pts.reduce((s, p, i) => { const q = pts[(i + 1) % pts.length]; return s + p.x * q.y - q.x * p.y; }, 0)) / 2;
   return {
-    title: "Select",
+    title: k.label,
     body: [
-      h("label", {}, "Shape", kindSeg),
       hint,
-      wandOpts,
+      kind === "wand" ? wandOpts : null,
       h("label", {}, "Mode", modeSeg),
       actions,
-    ],
+    ].filter(Boolean),
     cursor: "crosshair",
     wantsPointer: true,
     onSelectionChange: sync,
@@ -778,7 +784,6 @@ export function selectTool(A, makeLayer, onKind) {
       if (kind === "ellipse") ctx.ellipse(a.x + w / 2, a.y + hh / 2, w / 2, hh / 2, 0, 0, Math.PI * 2); else ctx.rect(a.x, a.y, w, hh);
       ctx.fill(); ctx.stroke();
     },
-    setKind,
     cleanup() { poly = null; drag = null; },
   };
 }
