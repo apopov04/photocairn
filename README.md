@@ -4,7 +4,7 @@
 
 <p align="center"><b>Quick photo edits in your browser. No ads, no account, nothing uploaded.</b></p>
 
-<p align="center"><a href="https://silicairn.com/photocairn/"><b>Open Photocairn →</b></a></p>
+<p align="center"><a href="https://photocairn.silicairn.com/"><b>Open Photocairn →</b></a></p>
 
 <p align="center"><img src="docs/screenshot.png" alt="Photocairn removing the background from a photo of a pug in a blanket" width="860"></p>
 
