@@ -2,7 +2,7 @@
 //   node tests/serve.mjs &        (serves the app on :8080)
 //   CHROME=/path/to/chrome node tests/e2e/run.mjs tests/e2e/tools.txt
 // Each line of a scenario file is a step: tool:<name>, clicktext:<label>,
-// drag:x1:y1:x2:y2 (fractions of the canvas), range:<index>:<value>,
+// drag:x1:y1:x2:y2 (fractions of the canvas), tap:x:y, path:x1:y1:x2:y2:..., range:<index>:<value>,
 // waitfor:<js expr>, eval:<js expr>, key:<combo>, shot:<name>, wait:<ms>,
 // addlayer:<image path>, openfile:<path>, select:<css>:<value>, menu:<Menu>:<Item>.
 // Set URL= to test a deployed copy.
@@ -10,7 +10,7 @@
 import puppeteer from "puppeteer-core";
 import fs from "fs";
 const shots = new URL("./shots", import.meta.url).pathname; fs.mkdirSync(shots, { recursive: true });
-const browser = await puppeteer.launch({ executablePath: process.env.CHROME || "/usr/bin/chromium", headless: true, args: ["--disable-gpu"], protocolTimeout: 240000 });
+const browser = await puppeteer.launch({ executablePath: process.env.CHROME || "/usr/bin/chromium", headless: true, args: ["--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage"], protocolTimeout: 240000 });
 const page = await browser.newPage();
 fs.mkdirSync(new URL("./downloads", import.meta.url).pathname, { recursive: true });
 const cdp = await page.createCDPSession();
@@ -61,6 +61,17 @@ for (const s of steps) { console.error("step", s);
     await page.mouse.move(r.x + r.w * x1, r.y + r.h * y1); await page.mouse.down();
     for (let i = 1; i <= 8; i++) await page.mouse.move(r.x + r.w * (x1 + (x2 - x1) * i / 8), r.y + r.h * (y1 + (y2 - y1) * i / 8));
     await page.mouse.up();
+  }
+  else if (name === "tap" || name === "path") { // tap:x:y clicks; path:x1:y1:x2:y2:... drags through points
+    const r = await page.$eval("#stage-wrap", (e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; });
+    const mod = /^[A-Z]/.test(args.at(-1) || "") ? args.pop() : null; // optional held key, e.g. tap:x:y:Shift
+    const n = args.map(Number), pts = [];
+    for (let i = 0; i < n.length; i += 2) pts.push([r.x + r.w * n[i], r.y + r.h * n[i + 1]]);
+    if (mod) await page.keyboard.down(mod);
+    await page.mouse.move(...pts[0]); await page.mouse.down();
+    for (const [a, b] of pts.slice(1)) await page.mouse.move(a, b, { steps: 6 });
+    await page.mouse.up();
+    if (mod) await page.keyboard.up(mod);
   }
   else if (name === "addlayer") { await page.evaluate(async (b64) => { const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)); await window.__photocairn.addLayer(new Blob([bin], { type: "image/jpeg" }), "pug.jpg"); }, fs.readFileSync(args[0]).toString("base64")); }
   else if (name === "openfile") { await page.evaluate(async (b64, n) => { const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)); await window.__photocairn.open(new Blob([bin]), n); }, fs.readFileSync(args[0]).toString("base64"), args[0].split("/").pop()); }

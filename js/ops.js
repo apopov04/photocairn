@@ -364,3 +364,44 @@ export function hexToRgb(hex) {
 export function rgbToHex(r, g, b) {
   return "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
 }
+
+/**
+ * Trace the edges of a selection mask into closed loops for the marching
+ * ants. `data` holds one value per pixel at data[(y*w+x)*stride+offset]; a
+ * pixel is selected when its value is >= 128. Returns an array of loops, each
+ * a flat [x0, y0, x1, y1, ...] list of corner points on the pixel grid.
+ */
+export function maskOutline(data, w, h, stride = 1, offset = 0) {
+  const VW = w + 1, dirs = new Uint8Array(VW * (h + 1)); // bits: 1 right, 2 down, 4 left, 8 up
+  const on = (x, y) => x >= 0 && y >= 0 && x < w && y < h && data[(y * w + x) * stride + offset] >= 128;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (!on(x, y)) continue;
+      // Edges run clockwise around selected areas.
+      if (!on(x, y - 1)) dirs[y * VW + x] |= 1;
+      if (!on(x + 1, y)) dirs[y * VW + x + 1] |= 2;
+      if (!on(x, y + 1)) dirs[(y + 1) * VW + x + 1] |= 4;
+      if (!on(x - 1, y)) dirs[(y + 1) * VW + x] |= 8;
+    }
+  }
+  const DX = [1, 0, -1, 0], DY = [0, 1, 0, -1], loops = [];
+  for (let v = 0; v < dirs.length; v++) {
+    while (dirs[v]) {
+      const pts = [];
+      let x = v % VW, y = (v / VW) | 0, cur = v, d = -1;
+      for (;;) {
+        const b = dirs[cur];
+        if (!b) break;
+        let nd = -1;
+        if (d < 0) nd = b & 1 ? 0 : b & 2 ? 1 : b & 4 ? 2 : 3;
+        else for (const c of [(d + 1) & 3, d, (d + 3) & 3]) if ((b >> c) & 1) { nd = c; break; }
+        if (nd < 0) break;
+        dirs[cur] &= ~(1 << nd);
+        if (nd !== d) pts.push(x, y); // only keep corners
+        d = nd; x += DX[d]; y += DY[d]; cur = y * VW + x;
+      }
+      loops.push(pts);
+    }
+  }
+  return loops;
+}

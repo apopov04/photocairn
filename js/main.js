@@ -505,6 +505,11 @@ addEventListener("keydown", (e) => {
   if (!mod && !e.altKey) {
     const shortcut = { v: "move", m: "select", b: "brush", n: "pencil", e: "eraser", i: "eyedropper", k: "fill", g: "gradient", u: "shapes", t: "text", c: "crop" }[k];
     if (shortcut) { selectTool(shortcut, false); return; }
+    if (k === "w") { // magic wand
+      localStorage.setItem("pc-sel", "wand");
+      if (toolName === "select") tool.setKind?.("wand"); else selectTool("select", false);
+      return;
+    }
     if (k === "l") { showTab("layers"); return; }
     if (k === "x") { swapColors(); return; }
     if (k === "d") { resetColors(); return; }
@@ -672,7 +677,7 @@ function openCanvasSize() {
 
 function shortcutsDialog() {
   const rows = [
-    ["Move / Select / Crop", "V / M / C"], ["Brush / Pencil / Eraser", "B / N / E"], ["Bucket / Gradient / Eyedropper", "K / G / I"],
+    ["Move / Select / Crop", "V / M / C"], ["Magic wand", "W"], ["Brush / Pencil / Eraser", "B / N / E"], ["Bucket / Gradient / Eyedropper", "K / G / I"],
     ["Shapes / Text", "U / T"], ["Free transform", "Ctrl+T"], ["Swap / reset colors", "X / D"], ["Brush size", "[ / ]"],
     ["Select all / Deselect / Invert", "Ctrl+A / Ctrl+D / Ctrl+Shift+I"], ["Copy / Cut / Paste", "Ctrl+C / Ctrl+X / Ctrl+V"],
     ["Selection to new layer", "Ctrl+J"], ["New layer / Merge down", "Ctrl+Shift+N / Ctrl+E"], ["Delete selected pixels", "Delete"],

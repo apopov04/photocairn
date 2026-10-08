@@ -1,0 +1,39 @@
+tool:select
+clicktext:Lasso
+path:0.3:0.3:0.6:0.25:0.65:0.6:0.35:0.65:0.3:0.3
+eval:(() => { const m=__photocairn.doc.selection?.mask; if(!m) return "none"; const d=m.getContext("2d").getImageData(0,0,m.width,m.height).data; let n=0; for(let i=3;i<d.length;i+=4) if(d[i]>127) n++; return (100*n/(m.width*m.height)).toFixed(1)+"% selected"; })()
+shot:L1-lasso
+clicktext:Polygon
+tap:0.4:0.4
+tap:0.7:0.4
+tap:0.55:0.75
+shot:L2-polygon-open
+tap:0.4:0.4
+eval:(() => { const m=__photocairn.doc.selection?.mask; if(!m) return "none"; const d=m.getContext("2d").getImageData(0,0,m.width,m.height).data; let n=0; for(let i=3;i<d.length;i+=4) if(d[i]>127) n++; return (100*n/(m.width*m.height)).toFixed(1)+"% selected"; })()
+shot:L3-polygon-closed
+tap:0.2:0.2
+tap:0.3:0.2
+tap:0.25:0.3
+key:Enter
+eval:(() => { const m=__photocairn.doc.selection?.mask; if(!m) return "none"; const d=m.getContext("2d").getImageData(0,0,m.width,m.height).data; let n=0; for(let i=3;i<d.length;i+=4) if(d[i]>127) n++; return (100*n/(m.width*m.height)).toFixed(1)+"% selected"; })()
+key:Escape
+eval:(() => { const m=__photocairn.doc.selection?.mask; if(!m) return "none"; const d=m.getContext("2d").getImageData(0,0,m.width,m.height).data; let n=0; for(let i=3;i<d.length;i+=4) if(d[i]>127) n++; return (100*n/(m.width*m.height)).toFixed(1)+"% selected"; })()
+clicktext:Magic wand
+tap:0.5:0.5
+eval:(() => { const m=__photocairn.doc.selection?.mask; if(!m) return "none"; const d=m.getContext("2d").getImageData(0,0,m.width,m.height).data; let n=0; for(let i=3;i<d.length;i+=4) if(d[i]>127) n++; return (100*n/(m.width*m.height)).toFixed(1)+"% selected"; })()
+shot:L4-wand
+range:0:5
+key:Shift
+tap:0.2:0.8
+eval:(() => { const m=__photocairn.doc.selection?.mask; if(!m) return "none"; const d=m.getContext("2d").getImageData(0,0,m.width,m.height).data; let n=0; for(let i=3;i<d.length;i+=4) if(d[i]>127) n++; return (100*n/(m.width*m.height)).toFixed(1)+"% selected"; })()
+range:0:60
+tap:0.5:0.5
+eval:(() => { const m=__photocairn.doc.selection?.mask; if(!m) return "none"; const d=m.getContext("2d").getImageData(0,0,m.width,m.height).data; let n=0; for(let i=3;i<d.length;i+=4) if(d[i]>127) n++; return (100*n/(m.width*m.height)).toFixed(1)+"% selected"; })()
+shot:L5-wand60
+tool:brush
+range:0:80
+drag:0.1:0.5:0.9:0.5
+shot:L6-brush-in-wand
+tool:move
+key:w
+eval:document.querySelector("#panel .seg .on")?.textContent

@@ -122,7 +122,7 @@ export class Doc {
     this.listeners = new Set();
     this.version = 0;
     this._composite = null;
-    // Current selection: null, or { mask: canvas (alpha = selected), shapes: [...] }.
+    // Current selection: null, or { mask: canvas (alpha = selected), inverted? }.
     // Not part of undo history; cleared whenever the image size changes.
     this.selection = null;
   }

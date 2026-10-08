@@ -147,3 +147,22 @@ test("alphaBounds and color helpers", () => {
   assert.deepEqual(ops.hexToRgb("#fff"), [255, 255, 255]);
   assert.equal(ops.rgbToHex(255, 128, 0), "#ff8000");
 });
+
+test("maskOutline traces a square, a hole and separate pieces", () => {
+  // 4x4 ring: selected border, hole in the middle 2x2
+  const ring = new Uint8Array(16).fill(255);
+  ring[5] = ring[6] = ring[9] = ring[10] = 0;
+  const loops = ops.maskOutline(ring, 4, 4);
+  assert.equal(loops.length, 2);
+  assert.deepEqual(loops[0], [0, 0, 4, 0, 4, 4, 0, 4]);
+  assert.equal(loops[1].length, 8); // the hole is a 4-corner loop too
+  // two diagonal pixels touch at a corner: every edge used once, 8 edges total
+  const diag = Uint8Array.from([255, 0, 0, 255]);
+  const d = ops.maskOutline(diag, 2, 2);
+  const corners = d.reduce((n, l) => n + l.length / 2, 0);
+  assert.equal(corners, 8);
+  assert.equal(ops.maskOutline(new Uint8Array(4), 2, 2).length, 0);
+  // stride/offset read the alpha channel of RGBA data
+  const rgba = new Uint8Array(4 * 4); rgba[3] = 255;
+  assert.deepEqual(ops.maskOutline(rgba, 2, 2, 4, 3), [[0, 0, 1, 0, 1, 1, 0, 1]]);
+});

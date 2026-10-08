@@ -1,5 +1,6 @@
 // Painting and selection tools: brush, pencil, eraser, shapes, paint bucket,
-// gradient, eyedropper, marquee selection, move and free transform.
+// gradient, eyedropper, selection (marquee, lasso, magic wand), move and
+// free transform.
 //
 // Every pixel edit goes through applyPaint()/withinSelection(), which honour
 // the current selection and the layer's "lock transparent pixels" setting.
@@ -449,37 +450,51 @@ export function gradientTool(A) {
 }
 
 /* --------------------------------- selection --------------------------------- */
+// A selection is { mask: canvas (alpha = selected), inverted? }. The marching
+// ants are traced from the mask, so any shape (lasso, magic wand...) works.
 
 function shapeCanvas(w, hgt, s) {
   const c = makeCanvas(w, hgt), x = c.getContext("2d");
   x.fillStyle = "#000";
   x.beginPath();
   if (s.kind === "ellipse") x.ellipse(s.x + s.w / 2, s.y + s.h / 2, Math.max(0.5, s.w / 2), Math.max(0.5, s.h / 2), 0, 0, Math.PI * 2);
+  else if (s.kind === "poly") { s.pts.forEach((p, i) => (i ? x.lineTo(p.x, p.y) : x.moveTo(p.x, p.y))); x.closePath(); }
   else x.rect(s.x, s.y, s.w, s.h);
   x.fill();
   return c;
 }
 
-/** Combine a new shape into the doc selection. op: new | add | subtract | intersect */
-export function selectShape(A, s, op = "new") {
+/** Combine a mask canvas into the doc selection. op: new | add | subtract | intersect */
+export function selectMask(A, shape, op = "new") {
   const d = A.doc;
-  const shape = shapeCanvas(d.width, d.height, s);
   if (op === "new" || !d.selection) {
-    if (op === "subtract" || op === "intersect") { if (!d.selection) return; }
-    d.selection = { mask: shape, shapes: [{ ...s, op: "add" }] };
+    if (op === "subtract" || op === "intersect") return;
+    d.selection = { mask: shape };
   } else {
     const mask = copyCanvas(d.selection.mask), x = mask.getContext("2d");
     x.globalCompositeOperation = op === "add" ? "source-over" : op === "subtract" ? "destination-out" : "destination-in";
     x.drawImage(shape, 0, 0);
-    d.selection = { mask, shapes: [...d.selection.shapes, { ...s, op }] };
+    d.selection = { mask };
   }
-  if (!ops.alphaBounds(getImageData(d.selection.mask))) d.selection = null;
+  if (!ops.alphaBounds(getImageData(d.selection.mask), 127)) d.selection = null;
   A.selectionChanged();
+}
+
+export function selectShape(A, s, op = "new") {
+  selectMask(A, shapeCanvas(A.doc.width, A.doc.height, s), op);
+}
+
+/** Magic wand: select pixels similar to the one at p. */
+export function selectSimilar(A, p, { tolerance = 32, contiguous = true, all = false } = {}, op = "new") {
+  const d = A.doc;
+  if (p.x < 0 || p.y < 0 || p.x >= d.width || p.y >= d.height) { if (op === "new") deselect(A); return; }
+  const mask = ops.floodMask(getImageData(all ? A.composite() : d.canvas), p.x, p.y, tolerance, contiguous);
+  selectMask(A, maskCanvas(mask, d.width, d.height), op);
 }
 
 export function selectAll(A) {
   const d = A.doc;
-  d.selection = { mask: shapeCanvas(d.width, d.height, { kind: "rect", x: 0, y: 0, w: d.width, h: d.height }), shapes: [{ kind: "rect", x: 0, y: 0, w: d.width, h: d.height, op: "add" }] };
+  d.selection = { mask: shapeCanvas(d.width, d.height, { kind: "rect", x: 0, y: 0, w: d.width, h: d.height }) };
   A.selectionChanged();
 }
 
@@ -491,7 +506,8 @@ export function invertSelection(A) {
   const mask = makeCanvas(d.width, d.height), x = mask.getContext("2d");
   x.fillStyle = "#000"; x.fillRect(0, 0, d.width, d.height);
   x.globalCompositeOperation = "destination-out"; x.drawImage(d.selection.mask, 0, 0);
-  d.selection = { mask, shapes: d.selection.shapes, inverted: !d.selection.inverted };
+  if (!ops.alphaBounds(getImageData(mask), 127)) return deselect(A);
+  d.selection = { mask, inverted: !d.selection.inverted };
   A.selectionChanged();
 }
 
@@ -539,28 +555,57 @@ export function cropToSelection(A) {
   A.view.fit();
 }
 
+// Traced outlines, cached per mask canvas.
+const outlines = new WeakMap();
+function outlineOf(mask) {
+  let o = outlines.get(mask);
+  if (!o) {
+    const img = getImageData(mask);
+    o = ops.maskOutline(img.data, img.width, img.height, 4, 3);
+    // A very noisy selection can have huge numbers of specks; skip the tiniest.
+    const total = o.reduce((n, l) => n + l.length, 0);
+    if (total > 400000) o = o.filter((l) => l.length > 8);
+    outlines.set(mask, o);
+  }
+  return o;
+}
+
 /** Marching-ants outline of the selection (screen space). */
 export function drawSelectionOutline(ctx, view, doc, phase) {
   const sel = doc.selection;
   if (!sel) return;
-  const shapes = sel.inverted ? [{ kind: "rect", x: 0, y: 0, w: doc.width, h: doc.height }, ...sel.shapes] : sel.shapes;
+  const loops = outlineOf(sel.mask), z = view.zoom, px = view.panX, py = view.panY;
+  const path = new Path2D();
+  for (const l of loops) {
+    for (let i = 0; i < l.length; i += 2) {
+      const sx = Math.round(l[i] * z + px) + 0.5, sy = Math.round(l[i + 1] * z + py) + 0.5;
+      if (i) path.lineTo(sx, sy); else path.moveTo(sx, sy);
+    }
+    path.closePath();
+  }
   ctx.save();
   ctx.lineWidth = 1;
   for (const [color, off] of [["#000", 0], ["#fff", 4]]) {
     ctx.strokeStyle = color; ctx.setLineDash([4, 4]); ctx.lineDashOffset = -phase + off;
-    for (const s of shapes) {
-      const a = view.toScreen(s.x, s.y), w = s.w * view.zoom, hh = s.h * view.zoom;
-      ctx.beginPath();
-      if (s.kind === "ellipse") ctx.ellipse(a.x + w / 2, a.y + hh / 2, Math.abs(w / 2), Math.abs(hh / 2), 0, 0, Math.PI * 2);
-      else ctx.rect(Math.round(a.x) + 0.5, Math.round(a.y) + 0.5, Math.round(w), Math.round(hh));
-      ctx.stroke();
-    }
+    ctx.stroke(path);
   }
   ctx.restore();
 }
 
+const SEL_KINDS = [
+  { value: "rect", label: "Rectangle", title: "Drag a rectangle" },
+  { value: "ellipse", label: "Ellipse", title: "Drag an ellipse" },
+  { value: "lasso", label: "Lasso", title: "Draw around an area freehand" },
+  { value: "polygon", label: "Polygon", title: "Click corner points, click the first point or double-click to finish" },
+  { value: "wand", label: "Magic wand", title: "Click a color to select similar pixels (W)" },
+];
+
 export function selectTool(A, makeLayer) {
-  let kind = localStorage.getItem("pc-sel") || "rect", mode = "new", drag = null;
+  let kind = localStorage.getItem("pc-sel") || "rect", mode = "new", drag = null, poly = null, hover = null;
+  if (!SEL_KINDS.some((k) => k.value === kind)) kind = "rect";
+  const savedWand = JSON.parse(localStorage.getItem("pc-wand") || "null") || {};
+  const wand = { tolerance: savedWand.tolerance ?? 12, contiguous: savedWand.contiguous ?? true, all: !!savedWand.all };
+  const saveWand = () => localStorage.setItem("pc-wand", JSON.stringify(wand));
   const modeSeg = seg([
     { value: "new", label: "New" }, { value: "add", label: "Add" }, { value: "subtract", label: "Subtract" }, { value: "intersect", label: "Intersect" },
   ], mode, (v) => { mode = v; });
@@ -579,39 +624,119 @@ export function selectTool(A, makeLayer) {
     );
   };
   sync();
+  const HINTS = {
+    rect: "Drag to select.", ellipse: "Drag to select.",
+    lasso: "Hold and draw around the area. Let go to close the shape.",
+    polygon: "Click to place corners. Click the first point, double-click or press Enter to finish. Backspace removes the last point, Esc cancels.",
+    wand: "Click a color to select it and similar colors around it. Higher tolerance selects more.",
+  };
+  const hint = h("p", { class: "hint" });
+  const wandOpts = h("div", { class: "stack" },
+    slider({ label: "Tolerance", min: 0, max: 100, value: wand.tolerance, onInput: (v) => { wand.tolerance = v; saveWand(); } }),
+    h("label", { class: "checkbox" }, h("input", { type: "checkbox", checked: wand.contiguous, onchange: (e) => { wand.contiguous = e.target.checked; saveWand(); } }), "Contiguous (only connected areas)"),
+    h("label", { class: "checkbox" }, h("input", { type: "checkbox", checked: wand.all, onchange: (e) => { wand.all = e.target.checked; saveWand(); } }), "Sample all layers"));
+  const showKind = () => {
+    hint.textContent = `${HINTS[kind]} Hold Shift to add, Alt to subtract. Brushes, fills, adjustments and filters then only affect the selected area.`;
+    wandOpts.hidden = kind !== "wand";
+  };
+  showKind();
+  const setKind = (v) => { kind = v; poly = null; drag = null; localStorage.setItem("pc-sel", v); kindSeg.set(v); showKind(); A.redraw(); };
+  const kindSeg = seg(SEL_KINDS, kind, setKind);
+  let lastClick = { t: 0, p: null };
+  const opFor = (e) => (e?.shiftKey && e?.altKey ? "intersect" : e?.shiftKey ? "add" : e?.altKey ? "subtract" : mode);
+  const finishPoly = () => {
+    const p = poly; poly = null; hover = null;
+    if (p && p.pts.length >= 3) selectShape(A, { kind: "poly", pts: p.pts }, p.op);
+    A.redraw();
+  };
+  const near = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) * A.view.zoom < 8;
+  const polyArea = (pts) => Math.abs(pts.reduce((s, p, i) => { const q = pts[(i + 1) % pts.length]; return s + p.x * q.y - q.x * p.y; }, 0)) / 2;
   return {
     title: "Select",
     body: [
-      h("label", {}, "Shape", seg([{ value: "rect", label: "Rectangle" }, { value: "ellipse", label: "Ellipse" }], kind, (v) => { kind = v; localStorage.setItem("pc-sel", v); })),
+      h("label", {}, "Shape", kindSeg),
+      hint,
+      wandOpts,
       h("label", {}, "Mode", modeSeg),
       actions,
-      h("p", { class: "hint" }, "Drag to select. Hold Shift to add, Alt to subtract. Brushes, fills, adjustments and filters then only affect the selected area."),
     ],
     cursor: "crosshair",
     wantsPointer: true,
     onSelectionChange: sync,
     onDocChange: sync,
     down(p, e) {
-      const op = e?.shiftKey && e?.altKey ? "intersect" : e?.shiftKey ? "add" : e?.altKey ? "subtract" : mode;
-      drag = { a: p, b: p, op };
+      if (kind === "wand") { selectSimilar(A, p, wand, opFor(e)); return; }
+      if (kind === "polygon") {
+        const now = performance.now(), dbl = now - lastClick.t < 400 && lastClick.p && near(p, lastClick.p);
+        lastClick = { t: now, p };
+        if (!poly) { poly = { pts: [p], op: opFor(e) }; A.redraw(); return; }
+        if (near(p, poly.pts[0]) || (dbl && poly.pts.length >= 3)) { finishPoly(); return; }
+        poly.pts.push(p); A.redraw(); return;
+      }
+      drag = { a: p, b: p, pts: [p], op: opFor(e) };
     },
-    move(p) { if (drag) { drag.b = p; A.redraw(); } },
+    move(p) {
+      if (kind === "polygon" && poly) { hover = p; A.redraw(); return; }
+      if (!drag) return;
+      drag.b = p;
+      const last = drag.pts[drag.pts.length - 1];
+      if (Math.hypot(p.x - last.x, p.y - last.y) * A.view.zoom >= 2) drag.pts.push(p);
+      A.redraw();
+    },
+    hover(p) { if (poly) { hover = p; A.redraw(); } },
     up() {
       if (!drag) return;
-      const { a, b, op } = drag; drag = null;
+      const { a, b, op, pts } = drag; drag = null;
+      if (kind === "lasso") {
+        if (pts.length < 3 || polyArea(pts) < 4) { if (op === "new") deselect(A); A.redraw(); return; }
+        selectShape(A, { kind: "poly", pts }, op);
+        return;
+      }
       const s = { kind, x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
       if (s.w < 2 || s.h < 2) { if (op === "new") deselect(A); A.redraw(); return; }
       selectShape(A, s, op);
     },
+    keydown(e) {
+      if (!poly) return false;
+      if (e.key === "Enter") { finishPoly(); return true; }
+      if (e.key === "Escape") { poly = null; hover = null; A.redraw(); return true; }
+      if (e.key === "Backspace" || e.key === "Delete") {
+        poly.pts.pop();
+        if (!poly.pts.length) poly = null;
+        A.redraw(); return true;
+      }
+      return false;
+    },
     overlay(ctx, view) {
+      const style = () => { ctx.strokeStyle = "#3a6df0"; ctx.fillStyle = "rgba(58,109,240,.12)"; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); };
+      if (poly) {
+        const pts = hover ? [...poly.pts, hover] : poly.pts;
+        style();
+        ctx.beginPath();
+        pts.forEach((q, i) => { const s = view.toScreen(q.x, q.y); if (i) ctx.lineTo(s.x, s.y); else ctx.moveTo(s.x, s.y); });
+        if (pts.length > 2) ctx.fill();
+        ctx.stroke();
+        const s0 = view.toScreen(poly.pts[0].x, poly.pts[0].y);
+        ctx.setLineDash([]); ctx.fillStyle = hover && near(hover, poly.pts[0]) ? "#3a6df0" : "#fff";
+        ctx.beginPath(); ctx.arc(s0.x, s0.y, 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        return;
+      }
       if (!drag) return;
+      style();
+      ctx.beginPath();
+      if (kind === "lasso") {
+        drag.pts.forEach((q, i) => { const s = view.toScreen(q.x, q.y); if (i) ctx.lineTo(s.x, s.y); else ctx.moveTo(s.x, s.y); });
+        const e = view.toScreen(drag.b.x, drag.b.y); ctx.lineTo(e.x, e.y);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        return;
+      }
       const a = view.toScreen(Math.min(drag.a.x, drag.b.x), Math.min(drag.a.y, drag.b.y));
       const w = Math.abs(drag.b.x - drag.a.x) * view.zoom, hh = Math.abs(drag.b.y - drag.a.y) * view.zoom;
-      ctx.strokeStyle = "#3a6df0"; ctx.fillStyle = "rgba(58,109,240,.12)"; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
-      ctx.beginPath();
       if (kind === "ellipse") ctx.ellipse(a.x + w / 2, a.y + hh / 2, w / 2, hh / 2, 0, 0, Math.PI * 2); else ctx.rect(a.x, a.y, w, hh);
       ctx.fill(); ctx.stroke();
     },
+    setKind,
+    cleanup() { poly = null; drag = null; },
   };
 }
 
@@ -638,7 +763,7 @@ function shiftSelection(A, dx, dy) {
   if (!sel) return;
   const mask = makeCanvas(d.width, d.height);
   mask.getContext("2d").drawImage(sel.mask, dx, dy);
-  d.selection = { ...sel, mask, shapes: sel.shapes.map((s) => ({ ...s, x: s.x + dx, y: s.y + dy })) };
+  d.selection = ops.alphaBounds(getImageData(mask), 127) ? { mask } : null;
   A.selectionChanged();
 }
 
