@@ -289,3 +289,78 @@ export function formatBytes(n) {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
+
+/**
+ * Paint-bucket region: 255 where a pixel matches the color at (sx, sy) within
+ * `tolerance` (0..100, per channel incl. alpha). Contiguous mode uses a
+ * scanline flood fill; otherwise every matching pixel in the image is taken.
+ * Fully transparent pixels match each other regardless of their hidden RGB.
+ */
+export function floodMask(img, sx, sy, tolerance = 0, contiguous = true) {
+  const { width: w, height: h, data: d } = img;
+  const mask = new Uint8Array(w * h);
+  sx = Math.floor(sx); sy = Math.floor(sy);
+  if (sx < 0 || sy < 0 || sx >= w || sy >= h) return mask;
+  const i0 = (sy * w + sx) * 4;
+  const r0 = d[i0], g0 = d[i0 + 1], b0 = d[i0 + 2], a0 = d[i0 + 3];
+  const tol = tolerance * 2.55;
+  const match = (p) => {
+    const i = p * 4;
+    if (a0 === 0 && d[i + 3] === 0) return true;
+    return Math.abs(d[i] - r0) <= tol && Math.abs(d[i + 1] - g0) <= tol &&
+      Math.abs(d[i + 2] - b0) <= tol && Math.abs(d[i + 3] - a0) <= tol;
+  };
+  if (!contiguous) {
+    for (let p = 0; p < w * h; p++) if (match(p)) mask[p] = 255;
+    return mask;
+  }
+  const stack = [sx, sy];
+  while (stack.length) {
+    const y = stack.pop();
+    let x = stack.pop();
+    let p = y * w + x;
+    while (x >= 0 && !mask[p] && match(p)) { x--; p--; }
+    x++; p++;
+    let up = false, down = false;
+    while (x < w && !mask[p] && match(p)) {
+      mask[p] = 255;
+      if (y > 0) {
+        const q = p - w;
+        if (!mask[q] && match(q)) { if (!up) { stack.push(x, y - 1); up = true; } } else up = false;
+      }
+      if (y < h - 1) {
+        const q = p + w;
+        if (!mask[q] && match(q)) { if (!down) { stack.push(x, y + 1); down = true; } } else down = false;
+      }
+      x++; p++;
+    }
+  }
+  return mask;
+}
+
+/** Bounding box of pixels with alpha > threshold, or null if empty. */
+export function alphaBounds(img, threshold = 0) {
+  const { width: w, height: h, data: d } = img;
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (d[(y * w + x) * 4 + 3] > threshold) {
+        if (x < x0) x0 = x; if (x > x1) x1 = x;
+        if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+    }
+  }
+  return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+
+/** Parse #rgb / #rrggbb into [r, g, b]. */
+export function hexToRgb(hex) {
+  let s = hex.replace("#", "");
+  if (s.length === 3) s = s.split("").map((c) => c + c).join("");
+  const n = parseInt(s, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+export function rgbToHex(r, g, b) {
+  return "#" + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+}

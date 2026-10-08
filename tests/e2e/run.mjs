@@ -4,7 +4,7 @@
 // Each line of a scenario file is a step: tool:<name>, clicktext:<label>,
 // drag:x1:y1:x2:y2 (fractions of the canvas), range:<index>:<value>,
 // waitfor:<js expr>, eval:<js expr>, key:<combo>, shot:<name>, wait:<ms>,
-// addlayer:<image path>, select:<css>:<value>. Set URL= to test a deployed copy.
+// addlayer:<image path>, openfile:<path>, select:<css>:<value>. Set URL= to test a deployed copy.
 // Needs `npm i -D puppeteer-core`.
 import puppeteer from "puppeteer-core";
 import fs from "fs";
@@ -35,7 +35,7 @@ for (const s of steps) { console.error("step", s);
   const [name, ...args] = s.split(":");
   if (name === "tool") { await page.click(`#tools button[data-tool="${args[0]}"]`); await shot(`tool-${args[0]}`); }
   else if (name === "click") { await page.evaluate((sel) => document.querySelector(sel).click(), args.join(":")); }
-  else if (name === "clicktext") { await page.evaluate((t) => [...document.querySelectorAll("#panel button")].find((b) => b.textContent.trim() === t).click(), args.join(":")); }
+  else if (name === "clicktext") { await page.evaluate((t) => [...document.querySelectorAll("#panel button, dialog button")].find((b) => b.textContent.trim() === t).click(), args.join(":")); }
   else if (name === "wait") { await new Promise((r) => setTimeout(r, +args[0])); }
   else if (name === "waitfor") { await page.waitForFunction(new Function(`return ${args.join(":")}`), { timeout: 200000, polling: 500 }); }
   else if (name === "range") { await page.evaluate((i, v) => { const r = document.querySelectorAll("#panel input[type=range]")[+i]; r.value = v; r.dispatchEvent(new Event("input")); r.dispatchEvent(new Event("change")); }, args[0], args[1]); }
@@ -47,6 +47,7 @@ for (const s of steps) { console.error("step", s);
     await page.mouse.up();
   }
   else if (name === "addlayer") { await page.evaluate(async (b64) => { const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)); await window.__photocairn.addLayer(new Blob([bin], { type: "image/jpeg" }), "pug.jpg"); }, fs.readFileSync(args[0]).toString("base64")); }
+  else if (name === "openfile") { await page.evaluate(async (b64, n) => { const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)); await window.__photocairn.open(new Blob([bin]), n); }, fs.readFileSync(args[0]).toString("base64"), args[0].split("/").pop()); }
   else if (name === "select") { await page.evaluate((sel, v) => { const e = document.querySelector(sel); e.value = v; e.dispatchEvent(new Event("change")); }, args[0], args[1]); }
   else if (name === "key") { const ks = args[0].split("+"); for (const k of ks.slice(0, -1)) await page.keyboard.down(k); await page.keyboard.press(ks.at(-1)); for (const k of ks.slice(0, -1).reverse()) await page.keyboard.up(k); }
   else if (name === "shot") { await shot(args[0]); }

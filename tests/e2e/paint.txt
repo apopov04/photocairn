@@ -1,0 +1,33 @@
+shot:P0-rail
+tool:brush
+range:0:30
+range:1:20
+range:2:60
+click:#panel .swatch[data-v="#ff3b30"]
+drag:0.3:0.3:0.6:0.4
+shot:P1-brush
+eval:__photocairn.doc.undoStack.length
+tool:pencil
+drag:0.3:0.6:0.6:0.65
+tool:eraser
+range:0:40
+drag:0.3:0.35:0.45:0.35
+shot:P2-pencil-eraser
+tool:shapes
+clicktext:Ellipse
+click:#panel input[type=checkbox]
+drag:0.6:0.6:0.75:0.8
+shot:P3-shape
+tool:eyedropper
+drag:0.62:0.7:0.62:0.7
+eval:document.querySelector("#fg-well").style.background
+tool:fill
+range:0:20
+click:#panel .swatch[data-v="#34c759"]
+drag:0.1:0.1:0.1:0.1
+shot:P4-fill
+tool:gradient
+clicktext:Transparent
+drag:0.2:0.9:0.8:0.6
+shot:P5-gradient
+eval:__photocairn.doc.undoStack.length

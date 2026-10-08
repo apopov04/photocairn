@@ -5,10 +5,11 @@ eval:[__photocairn.doc.layers.length, __photocairn.doc.active, __photocairn.doc.
 range:0:60
 select:#panel select:multiply
 shot:L1-opacity-blend
-clicktext:✥ Move layer
+tool:move
 drag:0.5:0.5:0.65:0.4
 shot:L2-moved
 eval:__photocairn.doc.undoStack.length
+tool:layers
 click:#panel .layers li:last-child .eye
 shot:L3-hidden-bottom
 click:#panel .layers li:last-child .eye
@@ -30,7 +31,7 @@ clicktext:Crop
 eval:__photocairn.doc.layers.map(l=>l.canvas.width+"x"+l.canvas.height).join(" ")
 shot:L5-rot-crop
 tool:layers
-clicktext:Merge down
+clicktext:Merge ↓
 eval:__photocairn.doc.layers.map(l=>l.name).join("|")
 clicktext:Flatten
 eval:__photocairn.doc.layers.length

@@ -5,6 +5,8 @@ import { Doc, View, makeCanvas, resizeCanvas, makeLayer } from "./editor.js";
 import { formatBytes, fitSize } from "./ops.js";
 import { h } from "./ui.js";
 import * as T from "./tools.js";
+import * as P from "./paint.js";
+import * as PSD from "./psd.js";
 
 const $ = (s) => document.querySelector(s);
 const app = $("#app"), stageWrap = $("#stage-wrap"), panel = $("#panel");
@@ -48,6 +50,47 @@ const A = {
   },
   setCursorStyle(css) { stageWrap.style.cursor = css || ""; },
   addImageLayer: (blob, name) => addImageLayer(blob, name),
+  colors: { fg: localStorage.getItem("pc-fg") || "#000000", bg: localStorage.getItem("pc-bg") || "#ffffff" },
+  setColor(which, hex) {
+    A.colors[which] = hex;
+    localStorage.setItem(`pc-${which}`, hex);
+    renderColorWell();
+    tool?.onColorChange?.();
+  },
+  selectionChanged() {
+    updateAnts();
+    tool?.onSelectionChange?.();
+    view.dirty = true;
+  },
+};
+
+/* ------------------------- colors & selection outline ------------------------ */
+
+function renderColorWell() {
+  $("#fg-well").style.background = A.colors.fg;
+  $("#bg-well").style.background = A.colors.bg;
+  $("#fg-input").value = A.colors.fg;
+  $("#bg-input").value = A.colors.bg;
+}
+$("#fg-input").addEventListener("input", (e) => A.setColor("fg", e.target.value));
+$("#bg-input").addEventListener("input", (e) => A.setColor("bg", e.target.value));
+$("#fg-well").onclick = () => $("#fg-input").click();
+$("#bg-well").onclick = () => $("#bg-input").click();
+const swapColors = () => { const { fg, bg } = A.colors; A.setColor("fg", bg); A.setColor("bg", fg); };
+const resetColors = () => { A.setColor("fg", "#000000"); A.setColor("bg", "#ffffff"); };
+$("#swap-colors").onclick = swapColors;
+$("#reset-colors").onclick = resetColors;
+renderColorWell();
+
+// Marching ants: animate the dash offset while a selection exists.
+let antsPhase = 0, antsTimer = null;
+function updateAnts() {
+  if (doc?.selection && !antsTimer) antsTimer = setInterval(() => { antsPhase = (antsPhase + 1) % 8; view.dirty = true; }, 120);
+  if (!doc?.selection && antsTimer) { clearInterval(antsTimer); antsTimer = null; }
+}
+view.drawOverlay = (ctx, v) => {
+  if (doc?.selection) P.drawSelectionOutline(ctx, v, doc, antsPhase);
+  tool?.overlay?.(ctx, v);
 };
 
 /* ------------------------------------ toast ----------------------------------- */
@@ -74,7 +117,7 @@ function decodeWithImg(blob) {
 }
 
 async function decode(blob, name) {
-  if (blob.type && !blob.type.startsWith("image/")) { toast("That file isn't an image."); return null; }
+  if (blob.type && !blob.type.startsWith("image/") && !PSD.isPsd(blob, name)) { toast("That file isn't an image."); return null; }
   try {
     return await createImageBitmap(blob, { imageOrientation: "from-image" });
   } catch {
@@ -90,7 +133,11 @@ async function decode(blob, name) {
 /** Add an image as a new layer above the selected one, scaled down to fit and centered. */
 async function addImageLayer(blob, name = "image") {
   if (!blob || !doc) return;
-  const src = await decode(blob, name);
+  let src;
+  if (PSD.isPsd(blob, name)) {
+    try { const p = await PSD.readPsd(blob); src = Doc.fromLayers(p.layers, p.width, p.height, name).composite(); }
+    catch (err) { return toast(`Couldn't open that PSD: ${err.message}`, 5000); }
+  } else src = await decode(blob, name);
   if (!src) return;
   const s = fitSize(src.width, src.height, doc.width, doc.height);
   const c = makeCanvas(doc.width, doc.height), x = c.getContext("2d");
@@ -105,9 +152,23 @@ async function addImageLayer(blob, name = "image") {
   toast("Added as a new layer. Use Move layer to position it.");
 }
 
+async function openPsd(blob, name) {
+  toast("Opening PSD…", 8000);
+  try {
+    const p = await PSD.readPsd(blob);
+    if (p.width * p.height > MAX_PIXELS) return toast(`This PSD is ${p.width} × ${p.height}, too large to edit here.`, 4500);
+    setDoc(Doc.fromLayers(p.layers, p.width, p.height, baseName(name)));
+    toast(`Opened ${p.layers.length} layer${p.layers.length === 1 ? "" : "s"}.`);
+  } catch (err) {
+    console.error(err);
+    toast(`Couldn't open that PSD: ${err.message}`, 5000);
+  }
+}
+
 async function openBlob(blob, name = "image") {
   if (!blob) return;
   if (doc?.canUndo && !confirm("Open a new image? Your current edits will be lost.")) return;
+  if (PSD.isPsd(blob, name)) return openPsd(blob, name);
   const src = await decode(blob, name);
   if (!src) return;
   let w = src.width, hgt = src.height;
@@ -140,6 +201,7 @@ function onDocChange() {
   display();
   updateChrome();
   updateLayerNote();
+  updateAnts();
   tool?.onDocChange?.();
   scheduleExportEstimate();
 }
@@ -148,6 +210,46 @@ function updateChrome() {
   $("#btn-undo").disabled = !doc?.canUndo;
   $("#btn-redo").disabled = !doc?.canRedo;
 }
+
+/* ------------------------------- new blank image ------------------------------ */
+
+const NEW_PRESETS = [
+  ["1080 × 1080", 1080, 1080, "Square post"], ["1080 × 1350", 1080, 1350, "Portrait post"],
+  ["1080 × 1920", 1080, 1920, "Story / reel"], ["1920 × 1080", 1920, 1080, "Full HD"],
+  ["1200 × 630", 1200, 630, "Link preview"], ["512 × 512", 512, 512, "Icon / avatar"],
+];
+function newImageDialog() {
+  let bg = localStorage.getItem("pc-new-bg") || "white";
+  const wIn = h("input", { type: "number", min: 1, max: 8000, value: localStorage.getItem("pc-new-w") || 1080, required: true });
+  const hIn = h("input", { type: "number", min: 1, max: 8000, value: localStorage.getItem("pc-new-h") || 1080, required: true });
+  const bgSeg = h("div", { class: "seg" }, ...[["white", "White"], ["transparent", "Transparent"], ["fg", "Main color"]].map(([v, label]) =>
+    h("button", { type: "button", class: v === bg ? "on" : "", onclick: (e) => { bg = v; for (const b of bgSeg.children) b.classList.toggle("on", b === e.currentTarget); } }, label)));
+  const dlg = h("dialog", { "aria-label": "New image" },
+    h("form", { method: "dialog" },
+      h("h2", {}, "New blank image"),
+      h("div", { class: "seg" }, ...NEW_PRESETS.map(([label, w, hh, title]) => h("button", { type: "button", title, onclick: () => { wIn.value = w; hIn.value = hh; } }, label))),
+      h("div", { class: "row", style: "display:flex;gap:10px" }, h("label", { style: "flex:1" }, "Width (px)", wIn), h("label", { style: "flex:1" }, "Height (px)", hIn)),
+      h("label", {}, "Background", bgSeg),
+      h("div", { class: "row", style: "display:flex;gap:8px;justify-content:flex-end" },
+        h("button", { type: "button", onclick: () => dlg.close() }, "Cancel"),
+        h("button", { class: "primary", value: "ok" }, "Create")),
+    ));
+  dlg.addEventListener("close", () => {
+    dlg.remove();
+    if (dlg.returnValue !== "ok") return;
+    const w = Math.max(1, Math.min(8000, Math.round(+wIn.value))), hh = Math.max(1, Math.min(8000, Math.round(+hIn.value)));
+    if (w * hh > MAX_PIXELS) return toast("That's too large. Try 4096 × 4096 or smaller.");
+    if (doc?.canUndo && !confirm("Start a new image? Your current edits will be lost.")) return;
+    localStorage.setItem("pc-new-w", w); localStorage.setItem("pc-new-h", hh); localStorage.setItem("pc-new-bg", bg);
+    const c = makeCanvas(w, hh), x = c.getContext("2d");
+    if (bg !== "transparent") { x.fillStyle = bg === "fg" ? A.colors.fg : "#ffffff"; x.fillRect(0, 0, w, hh); }
+    setDoc(new Doc(c, "untitled"));
+  });
+  document.body.append(dlg);
+  dlg.showModal();
+}
+$("#btn-new").onclick = newImageDialog;
+$("#btn-new-2").onclick = newImageDialog;
 
 fileInput.addEventListener("change", () => { const f = fileInput.files[0]; fileInput.value = ""; if (f) openBlob(f, f.name); });
 const pick = () => fileInput.click();
@@ -163,7 +265,7 @@ addEventListener("dragover", (e) => e.preventDefault());
 addEventListener("drop", (e) => {
   e.preventDefault(); dragDepth = 0;
   stageWrap.classList.remove("dragover"); $("#drop").classList.remove("dragover");
-  const f = [...e.dataTransfer.files].find((f) => f.type.startsWith("image/") || /\.(heic|heif|avif)$/i.test(f.name));
+  const f = [...e.dataTransfer.files].find((f) => f.type.startsWith("image/") || /\.(heic|heif|avif|psd)$/i.test(f.name));
   if (!f) return toast("Drop an image file.");
   doc ? addImageLayer(f, f.name) : openBlob(f, f.name);
 });
@@ -179,23 +281,27 @@ addEventListener("paste", (e) => {
 
 const FACTORIES = {
   cutout: T.cutoutTool, crop: T.cropTool, resize: T.resizeTool, adjust: T.adjustTool,
-  looks: T.looksTool, redact: T.redactTool, draw: T.drawTool, text: T.textTool, frame: T.frameTool,
+  looks: T.looksTool, redact: T.redactTool, text: T.textTool, frame: T.frameTool,
   layers: T.layersTool, rotate: T.rotateTool,
+  move: P.moveTool, select: (a) => P.selectTool(a, makeLayer), transform: P.transformTool,
+  brush: (a) => P.paintTool(a, "brush"), pencil: (a) => P.paintTool(a, "pencil"), eraser: (a) => P.paintTool(a, "eraser"),
+  shapes: P.shapesTool, fill: P.fillTool, gradient: P.gradientTool, eyedropper: P.eyedropperTool,
   export: exportTool,
 };
 
-function selectTool(name) {
+function selectTool(name, toggle = true) {
+  if (name && name === toolName && !toggle) return;
   if (tool) { tool.cleanup?.(); }
   preview = null;
   display();
-  tool = null; view.drawOverlay = null;
+  tool = null;
   A.setCursor("pan"); A.setCursorStyle("");
   panel.replaceChildren();
   if (name === toolName || !name) { toolName = null; markTool(); view.dirty = true; return; }
   toolName = name;
   tool = FACTORIES[name](A);
   if (tool.cursor) A.setCursor(tool.cursor);
-  if (tool.overlay) view.drawOverlay = (ctx, v) => tool?.overlay(ctx, v);
+  if (tool.cursorStyle) A.setCursorStyle(tool.cursorStyle);
   layerNote = LAYER_TOOLS.has(name) ? h("p", { class: "layer-note" }) : null;
   panel.append(
     h("div", { class: "panel-head" }, h("h2", {}, tool.title), h("button", { class: "x", "aria-label": "Close", onclick: () => selectTool(null) }, "×")),
@@ -207,7 +313,7 @@ function selectTool(name) {
 }
 
 // Tools that edit only the selected layer (others act on the whole image).
-const LAYER_TOOLS = new Set(["cutout", "adjust", "looks", "redact", "draw"]);
+const LAYER_TOOLS = new Set(["cutout", "adjust", "looks", "redact", "move", "transform", "brush", "pencil", "eraser", "shapes", "fill", "gradient"]);
 let layerNote = null;
 function updateLayerNote() {
   if (!layerNote || !doc) return;
@@ -313,6 +419,8 @@ const origRender = view.render.bind(view);
 view.render = () => { origRender(); updateZoomLabel(); };
 
 $("#btn-fit").onclick = () => view.fit();
+$("#btn-zoom-in").onclick = () => { view.zoomAt(1.25, view.cssW / 2, view.cssH / 2); };
+$("#btn-zoom-out").onclick = () => { view.zoomAt(0.8, view.cssW / 2, view.cssH / 2); };
 $("#zoom-label").onclick = () => view.actualSize();
 $("#zoom-label").style.cursor = "pointer";
 $("#btn-undo").onclick = () => doc?.undo();
@@ -351,8 +459,21 @@ addEventListener("keydown", (e) => {
   if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? doc.redo() : doc.undo(); return; }
   if (mod && e.key.toLowerCase() === "y") { e.preventDefault(); doc.redo(); return; }
   if (tool?.keydown?.(e)) { e.preventDefault(); return; }
+  const k = e.key.toLowerCase();
+  if (mod && k === "a") { e.preventDefault(); P.selectAll(A); return; }
+  if (mod && k === "d") { e.preventDefault(); P.deselect(A); return; }
+  if (mod && e.shiftKey && k === "i") { e.preventDefault(); P.invertSelection(A); return; }
+  if (mod && k === "j") { e.preventDefault(); P.selectionToLayer(A, false, makeLayer); return; }
+  if (mod && k === "t") { e.preventDefault(); selectTool("transform", false); return; }
+  if ((e.key === "Delete" || e.key === "Backspace") && !mod) { e.preventDefault(); P.clearSelection(A); return; }
+  if (!mod && !e.altKey) {
+    const shortcut = { v: "move", m: "select", b: "brush", n: "pencil", e: "eraser", i: "eyedropper", k: "fill", g: "gradient", u: "shapes", t: "text", c: "crop", l: "layers" }[k];
+    if (shortcut) { selectTool(shortcut, false); return; }
+    if (k === "x") { swapColors(); return; }
+    if (k === "d") { resetColors(); return; }
+  }
   if (e.key === " ") { spaceDown = true; stageWrap.classList.add("pan"); e.preventDefault(); }
-  else if (e.key === "Escape") selectTool(null);
+  else if (e.key === "Escape") { if (doc.selection) P.deselect(A); else selectTool(null); }
   else if (e.key === "0") view.fit();
   else if (e.key === "1") view.actualSize();
   else if (e.key === "+" || e.key === "=") view.zoomAt(1.25, view.cssW / 2, view.cssH / 2);
@@ -370,7 +491,7 @@ addEventListener("beforeunload", (e) => { if (doc?.canUndo) { e.preventDefault()
 
 const canEncode = (type) => { const c = makeCanvas(1, 1); return c.toDataURL(type).startsWith(`data:${type}`); };
 const WEBP = canEncode("image/webp");
-const EXT = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
+const EXT = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/vnd.adobe.photoshop": "psd" };
 let estimateTimer = null, refreshExport = null;
 function scheduleExportEstimate() { if (refreshExport) { clearTimeout(estimateTimer); estimateTimer = setTimeout(refreshExport, 250); } }
 
@@ -382,7 +503,11 @@ function hasTransparency(canvas) {
   return false;
 }
 
-function renderExport(o) {
+async function renderExport(o) {
+  if (o.format === "image/vnd.adobe.photoshop") {
+    const blob = await PSD.writePsd(doc);
+    return { blob, w: doc.width, h: doc.height, layered: doc.layers.length };
+  }
   const w = Math.max(1, Math.round((doc.width * o.scale) / 100)), hgt = Math.max(1, Math.round((doc.height * o.scale) / 100));
   const flat = doc.composite();
   let c = o.scale === 100 ? flat : resizeCanvas(flat, w, hgt);
@@ -413,7 +538,9 @@ function exportTool() {
   const qOut = q.parentElement.querySelector("output"), sOut = sc.parentElement.querySelector("output");
   const syncUi = () => {
     for (const b of segEl.children) b.classList.toggle("on", b.dataset.v === o.format);
-    qRow.hidden = o.format === "image/png";
+    const psd = o.format === "image/vnd.adobe.photoshop";
+    qRow.hidden = o.format === "image/png" || psd;
+    sc.parentElement.hidden = psd;
     qOut.textContent = `${o.quality}%`;
     sOut.textContent = `${o.scale}%`;
   };
@@ -433,7 +560,7 @@ function exportTool() {
     const r = await renderExport(o);
     if (my !== seq) return;
     last = r;
-    meta.textContent = `${r.w} × ${r.h} px · ${formatBytes(r.blob.size)}`;
+    meta.textContent = `${r.w} × ${r.h} px · ${formatBytes(r.blob.size)}` + (r.layered ? ` · ${r.layered} layer${r.layered === 1 ? "" : "s"}, opens in Photoshop, GIMP, Photopea` : "");
   }
   refreshExport = refresh;
   root.querySelector('[data-action="download"]').onclick = async () => {

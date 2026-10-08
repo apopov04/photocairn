@@ -1,0 +1,13 @@
+click:#btn-new
+wait:300
+shot:N1-dialog
+clicktext:1080 × 1350
+clicktext:Transparent
+clicktext:Create
+wait:400
+eval:[__photocairn.doc.width,__photocairn.doc.height,__photocairn.doc.layers.length].join("x")
+click:#btn-zoom-in
+click:#btn-zoom-in
+eval:document.querySelector("#zoom-label").textContent
+click:#btn-zoom-out
+shot:N2-blank

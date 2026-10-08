@@ -112,3 +112,38 @@ test("fitSize and formatBytes", () => {
   assert.equal(ops.formatBytes(2048), "2.0 KB");
   assert.equal(ops.formatBytes(3 * 1024 * 1024), "3.0 MB");
 });
+
+test("floodMask contiguous stops at a wall, global finds all matches", () => {
+  // 5x1: white white black white white
+  const img = ops.makeImage(5, 1);
+  const px = [255, 255, 0, 255, 255];
+  px.forEach((v, i) => img.data.set([v, v, v, 255], i * 4));
+  assert.deepEqual([...ops.floodMask(img, 0, 0, 0, true)], [255, 255, 0, 0, 0]);
+  assert.deepEqual([...ops.floodMask(img, 0, 0, 0, false)], [255, 255, 0, 255, 255]);
+});
+
+test("floodMask tolerance and 2D fill", () => {
+  const img = ops.makeImage(3, 3);
+  for (let i = 0; i < 9; i++) img.data.set([100, 100, 100, 255], i * 4);
+  img.data.set([110, 100, 100, 255], 4 * 4); // center slightly different
+  assert.equal(ops.floodMask(img, 0, 0, 0).filter(Boolean).length, 8);
+  assert.equal(ops.floodMask(img, 0, 0, 5).filter(Boolean).length, 9);
+  assert.equal(ops.floodMask(img, 9, 9, 5).filter(Boolean).length, 0);
+});
+
+test("floodMask treats all transparent pixels alike", () => {
+  const img = ops.makeImage(2, 1);
+  img.data.set([255, 0, 0, 0, 0, 0, 255, 0]);
+  assert.equal(ops.floodMask(img, 0, 0, 0).filter(Boolean).length, 2);
+});
+
+test("alphaBounds and color helpers", () => {
+  const img = ops.makeImage(4, 4);
+  img.data[(1 * 4 + 2) * 4 + 3] = 255;
+  img.data[(3 * 4 + 1) * 4 + 3] = 255;
+  assert.deepEqual(ops.alphaBounds(img), { x: 1, y: 1, w: 2, h: 3 });
+  assert.equal(ops.alphaBounds(ops.makeImage(2, 2)), null);
+  assert.deepEqual(ops.hexToRgb("#ff8000"), [255, 128, 0]);
+  assert.deepEqual(ops.hexToRgb("#fff"), [255, 255, 255]);
+  assert.equal(ops.rgbToHex(255, 128, 0), "#ff8000");
+});

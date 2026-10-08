@@ -22,7 +22,7 @@ wait:300
 tool:redact
 drag:0.45:0.3:0.6:0.45
 shot:t4-redact
-tool:draw
+tool:shapes
 clicktext:Arrow
 drag:0.3:0.7:0.45:0.55
 shot:t5-draw

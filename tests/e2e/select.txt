@@ -1,0 +1,41 @@
+tool:select
+drag:0.3:0.3:0.6:0.6
+wait:300
+shot:S1-selection
+eval:__photocairn.doc.selection ? "sel" : "none"
+tool:brush
+range:0:80
+drag:0.2:0.45:0.8:0.45
+shot:S2-brush-clipped
+tool:move
+drag:0.45:0.45:0.55:0.35
+shot:S3-moved-selection
+key:Control+d
+eval:__photocairn.doc.selection ? "sel" : "none"
+key:Control+t
+wait:300
+shot:S4-transform
+drag:0.5:0.5:0.6:0.6
+eval:document.querySelectorAll("#panel input[type=number]")[0].value
+clicktext:Apply
+tool:layers
+clicktext:Pixels
+tool:brush
+drag:0.2:0.2:0.4:0.2
+eval:__photocairn.doc.undoStack.length
+tool:layers
+clicktext:Pixels
+clicktext:+ New
+clicktext:Clear
+clicktext:Merge visible
+eval:__photocairn.doc.layers.map(l=>l.name).join("|")
+tool:resize
+clicktext:Canvas size
+clicktext:Square
+shot:S5-canvas
+clicktext:Apply
+eval:[__photocairn.doc.width,__photocairn.doc.height].join("x")
+tool:text
+clicktext:Right
+clicktext:Black
+shot:S6-text

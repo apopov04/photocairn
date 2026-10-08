@@ -5,6 +5,7 @@
 import * as ops from "./ops.js";
 import { makeCanvas, ctx2d, copyCanvas, getImageData, canvasFromImageData, resizeCanvas, makeLayer, BLEND_MODES } from "./editor.js";
 import { h, slider, seg, swatches, progress, nextFrame } from "./ui.js";
+import { guard, withinSelection } from "./paint.js";
 
 const minSide = (d) => Math.min(d.width, d.height);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -46,6 +47,19 @@ function brushCursor(ctx, view, p, radiusImg) {
   ctx.beginPath(); ctx.arc(s.x, s.y, r + 1, 0, Math.PI * 2); ctx.stroke();
   ctx.strokeStyle = "rgba(255,255,255,.95)";
   ctx.beginPath(); ctx.arc(s.x, s.y, r, 0, Math.PI * 2); ctx.stroke();
+}
+
+/** Live preview limited to the selection (preview canvases are downscaled). */
+function previewWithin(A, basePrev, editedPrev) {
+  const sel = A.doc.selection;
+  if (!sel) return editedPrev;
+  const w = basePrev.width, hh = basePrev.height;
+  const piece = copyCanvas(editedPrev), px = piece.getContext("2d");
+  px.globalCompositeOperation = "destination-in"; px.drawImage(sel.mask, 0, 0, w, hh);
+  const out = copyCanvas(basePrev), x = out.getContext("2d");
+  x.globalCompositeOperation = "destination-out"; x.drawImage(sel.mask, 0, 0, w, hh);
+  x.globalCompositeOperation = "source-over"; x.drawImage(piece, 0, 0);
+  return out;
 }
 
 function applyButtons(onApply, onReset, applyLabel = "Apply") {
@@ -117,7 +131,7 @@ export function cutoutTool(A) {
   const body = [status, h("label", {}, "Model", quality), run, bar, after];
 
   async function go() {
-    if (busy) return;
+    if (busy || !guard(A)) return;
     busy = true; run.disabled = true; bar.hidden = false; bar.set(0);
     const t0 = performance.now();
     try {
@@ -187,6 +201,7 @@ export function cutoutTool(A) {
     hover(p) { hover = brushMode ? p : null; if (brushMode) A.redraw(); },
     get wantsPointer() { return !!brushMode; },
     down(p) {
+      if (!guard(A)) return;
       const doc = A.doc;
       doc.begin();
       const meta = doc.meta;
@@ -432,9 +447,15 @@ export function resizeTool(A) {
   const setPct = (p) => { w = Math.max(1, Math.round(A.doc.width * p)); hgt = Math.max(1, Math.round(A.doc.height * p)); sync(); };
   const setLong = (n) => { const s = n / Math.max(A.doc.width, A.doc.height); setPct(s); };
   sync();
-  return {
-    title: "Resize",
-    body: [
+  const canvasPart = canvasSizeSection(A);
+  const imagePart = h("div", { class: "stack" });
+  const modeSeg = seg([{ value: "image", label: "Image size" }, { value: "canvas", label: "Canvas size" }], "image", (v) => {
+    imagePart.hidden = v !== "image"; canvasPart.hidden = v !== "canvas";
+    if (v === "canvas") canvasPart.show(); else A.setSource(null);
+  });
+  canvasPart.hidden = true;
+  imagePart.append(
+      h("p", { class: "hint" }, "Scales the whole picture."),
       h("div", { class: "row" }, h("label", { class: "grow" }, "Width", wIn), h("label", { class: "grow" }, "Height", hIn)),
       h("label", { class: "checkbox" }, lockBox, "Keep proportions"),
       h("div", { class: "sub" }, "Quick sizes"),
@@ -448,10 +469,67 @@ export function resizeTool(A) {
         if (w === A.doc.width && hgt === A.doc.height) return A.toast("That's already the current size.");
         A.doc.commitAll((c) => resizeCanvas(c, w, hgt));
         A.view.fit();
-      }, () => setPct(1), "Resize"),
-    ],
-    onDocChange() { w = A.doc.width; hgt = A.doc.height; sync(); },
+      }, () => setPct(1), "Resize"));
+  return {
+    title: "Resize",
+    body: [modeSeg, imagePart, canvasPart],
+    onDocChange() { w = A.doc.width; hgt = A.doc.height; sync(); canvasPart.reset(); },
+    cleanup() { A.setSource(null); },
   };
+}
+
+/** Canvas size: add or trim space around the image without scaling it. */
+function canvasSizeSection(A) {
+  let w = A.doc.width, hgt = A.doc.height, ax = 1, ay = 1, fill = "transparent";
+  const wIn = h("input", { type: "number", min: 1, max: 16000, inputmode: "numeric" });
+  const hIn = h("input", { type: "number", min: 1, max: 16000, inputmode: "numeric" });
+  const meta = h("p", { class: "meta" });
+  const grid = h("div", { class: "anchor-grid", role: "group", "aria-label": "Anchor" });
+  const offset = () => ({ x: Math.round(((w - A.doc.width) * ax) / 2), y: Math.round(((hgt - A.doc.height) * ay) / 2) });
+  const build = (c, i, color) => {
+    const out = makeCanvas(w, hgt), x = out.getContext("2d");
+    if (i === 0 && color !== "transparent") { x.fillStyle = color; x.fillRect(0, 0, w, hgt); }
+    const o = offset();
+    x.drawImage(c, o.x, o.y);
+    return out;
+  };
+  const fillColor = () => (fill === "bg" ? A.colors.bg : fill === "fg" ? A.colors.fg : "transparent");
+  const show = () => {
+    wIn.value = w; hIn.value = hgt;
+    meta.textContent = `${A.doc.width} × ${A.doc.height} → ${w} × ${hgt} px`;
+    for (const b of grid.children) b.classList.toggle("on", +b.dataset.x === ax && +b.dataset.y === ay);
+    if (w === A.doc.width && hgt === A.doc.height) return A.setSource(null);
+    const prev = build(A.composite(), 0, fillColor());
+    A.setSource(prev, prev.width, prev.height);
+  };
+  for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) {
+    grid.append(h("button", { "data-x": x, "data-y": y, title: "Anchor", onclick: () => { ax = x; ay = y; show(); } }));
+  }
+  wIn.oninput = () => { w = Math.max(1, Math.min(16000, Math.round(+wIn.value || 1))); show(); };
+  hIn.oninput = () => { hgt = Math.max(1, Math.min(16000, Math.round(+hIn.value || 1))); show(); };
+  const addPct = (p) => { w = Math.round(A.doc.width * (1 + p)); hgt = Math.round(A.doc.height * (1 + p)); show(); };
+  const square = () => { w = hgt = Math.max(A.doc.width, A.doc.height); show(); };
+  const el = h("div", { class: "stack" },
+    h("p", { class: "hint" }, "Adds space around the picture (or trims it) without scaling. The anchor sets where the picture sits."),
+    h("div", { class: "row" }, h("label", { class: "grow" }, "Width", wIn), h("label", { class: "grow" }, "Height", hIn)),
+    h("div", { class: "row", style: "align-items:flex-start;gap:16px" },
+      h("label", {}, "Anchor", grid),
+      h("label", { class: "grow" }, "New area", seg([{ value: "transparent", label: "Transparent" }, { value: "bg", label: "Second color" }, { value: "fg", label: "Main color" }], fill, (v) => { fill = v; show(); }))),
+    h("div", { class: "seg" },
+      h("button", { onclick: () => addPct(0.1) }, "+10%"), h("button", { onclick: () => addPct(0.25) }, "+25%"),
+      h("button", { onclick: () => square(), title: "Pad to a square" }, "Square")),
+    meta,
+    applyButtons(() => {
+      if (w === A.doc.width && hgt === A.doc.height) return A.toast("Change the width or height first.");
+      const color = fillColor();
+      A.setSource(null);
+      A.doc.commitAll((c, i) => build(c, i, color));
+      A.view.fit();
+    }, () => { w = A.doc.width; hgt = A.doc.height; show(); }, "Apply"),
+  );
+  el.show = show;
+  el.reset = () => { w = A.doc.width; hgt = A.doc.height; if (!el.hidden) show(); };
+  return el;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -482,7 +560,7 @@ export function adjustTool(A) {
     requestAnimationFrame(() => {
       pending = false;
       const scale = preview.width / A.doc.width;
-      A.setSource(canvasFromImageData(runAdjust(base, vals, scale)));
+      A.setSource(previewWithin(A, preview, canvasFromImageData(runAdjust(base, vals, scale))));
     });
   };
   const sliders = [];
@@ -496,9 +574,10 @@ export function adjustTool(A) {
   const reset = () => { for (const k in vals) vals[k] = 0; for (const s of sliders) s.set(0); A.setSource(null); };
   const btns = applyButtons(async () => {
     if (Object.values(vals).every((v) => !v)) return A.toast("Move a slider first.");
+    if (!guard(A)) return;
     btns.apply.disabled = true; btns.apply.textContent = "Applying…";
     await nextFrame();
-    const out = canvasFromImageData(runAdjust(getImageData(A.doc.canvas), vals, 1));
+    const out = withinSelection(A, A.doc.canvas, canvasFromImageData(runAdjust(getImageData(A.doc.canvas), vals, 1)));
     btns.apply.disabled = false; btns.apply.textContent = "Apply";
     reset();
     A.doc.commit(out);
@@ -537,13 +616,14 @@ export function looksTool(A) {
     for (let i = 0; i < f.data.length; i++) f.data[i] = img.data[i] + (f.data[i] - img.data[i]) * k;
     return f;
   };
-  const render = () => { if (current === "none") return A.setSource(null); A.setSource(canvasFromImageData(mixed(base))); };
+  const render = () => { if (current === "none") return A.setSource(null); A.setSource(previewWithin(A, preview, canvasFromImageData(mixed(base)))); };
   make();
   const btns = applyButtons(async () => {
     if (current === "none") return A.toast("Pick a filter first.");
+    if (!guard(A)) return;
     btns.apply.disabled = true;
     await nextFrame();
-    const out = canvasFromImageData(mixed(getImageData(A.doc.canvas)));
+    const out = withinSelection(A, A.doc.canvas, canvasFromImageData(mixed(getImageData(A.doc.canvas))));
     btns.apply.disabled = false;
     current = "none"; mark(); A.setSource(null);
     A.doc.commit(out);
@@ -569,6 +649,7 @@ export function redactTool(A) {
     r = { x: Math.max(0, Math.floor(r.x)), y: Math.max(0, Math.floor(r.y)), w: Math.ceil(r.w), h: Math.ceil(r.h) };
     r.w = Math.min(r.w, A.doc.width - r.x); r.h = Math.min(r.h, A.doc.height - r.y);
     if (r.w < 3 || r.h < 3) return;
+    if (!guard(A)) return;
     A.doc.commit((c) => {
       const x = ctx2d(c);
       if (mode === "box") { x.fillStyle = color; x.fillRect(r.x, r.y, r.w, r.h); return; }
@@ -612,69 +693,6 @@ export function redactTool(A) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Draw (pen, highlighter, shapes, arrows)                                     */
-/* -------------------------------------------------------------------------- */
-
-function drawShape(x, kind, a, b, width) {
-  x.beginPath();
-  if (kind === "rect") x.rect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
-  else if (kind === "ellipse") x.ellipse((a.x + b.x) / 2, (a.y + b.y) / 2, Math.abs(b.x - a.x) / 2 || 0.5, Math.abs(b.y - a.y) / 2 || 0.5, 0, 0, Math.PI * 2);
-  else {
-    x.moveTo(a.x, a.y); x.lineTo(b.x, b.y);
-    if (kind === "arrow") {
-      const ang = Math.atan2(b.y - a.y, b.x - a.x), len = Math.max(width * 3.2, 12);
-      x.moveTo(b.x - len * Math.cos(ang - 0.45), b.y - len * Math.sin(ang - 0.45));
-      x.lineTo(b.x, b.y);
-      x.lineTo(b.x - len * Math.cos(ang + 0.45), b.y - len * Math.sin(ang + 0.45));
-    }
-  }
-  x.stroke();
-}
-
-export function drawTool(A) {
-  let kind = localStorage.getItem("pc-draw") || "pen";
-  let color = localStorage.getItem("pc-color") || "#ff3b30";
-  let size = Math.max(2, Math.round(minSide(A.doc) / 160)), hover = null, g = null;
-  const sizeSlider = slider({ label: "Size", min: 1, max: Math.max(40, Math.round(minSide(A.doc) / 12)), value: size, onInput: (v) => { size = v; A.redraw(); } });
-  return {
-    title: "Draw",
-    body: [
-      seg([
-        { value: "pen", label: "Pen" }, { value: "marker", label: "Highlighter" }, { value: "arrow", label: "Arrow" },
-        { value: "line", label: "Line" }, { value: "rect", label: "Box" }, { value: "ellipse", label: "Circle" },
-      ], kind, (v) => { kind = v; localStorage.setItem("pc-draw", v); }),
-      swatches({ value: color, onChange: (v) => { color = v; localStorage.setItem("pc-color", v); } }),
-      sizeSlider,
-      h("p", { class: "hint" }, "Hold Shift for straight 45° lines."),
-    ],
-    cursor: "brush",
-    wantsPointer: true,
-    hover(p) { hover = p; A.redraw(); },
-    down(p) { A.doc.begin(); g = { base: copyCanvas(A.doc.canvas), pts: [p], a: p, b: p }; this.move(p); },
-    move(p, e) {
-      hover = p;
-      if (!g) return A.redraw();
-      if (e?.shiftKey && kind !== "pen" && kind !== "marker") {
-        const dx = p.x - g.a.x, dy = p.y - g.a.y, ang = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4), len = Math.hypot(dx, dy);
-        p = { x: g.a.x + Math.cos(ang) * len, y: g.a.y + Math.sin(ang) * len };
-      }
-      g.pts.push(p); g.b = p;
-      const x = A.doc.canvas.getContext("2d");
-      x.save();
-      x.globalCompositeOperation = "copy"; x.drawImage(g.base, 0, 0); x.globalCompositeOperation = "source-over";
-      x.strokeStyle = color; x.lineCap = x.lineJoin = "round";
-      if (kind === "marker") { x.globalAlpha = 0.35; x.lineWidth = size * 4; x.lineCap = "square"; strokePoints(x, g.pts); }
-      else if (kind === "pen") { x.lineWidth = size; strokePoints(x, g.pts); }
-      else { x.lineWidth = size; drawShape(x, kind, g.a, g.b, size); }
-      x.restore();
-      A.refreshView();
-    },
-    up() { if (g) { g = null; A.doc.emit(); } },
-    overlay(ctx, view) { brushCursor(ctx, view, hover, kind === "marker" ? size * 2 : size / 2); },
-  };
-}
-
-/* -------------------------------------------------------------------------- */
 /* Text                                                                        */
 /* -------------------------------------------------------------------------- */
 
@@ -687,7 +705,7 @@ const FONTS = {
 };
 
 function layoutText(ctx, t) {
-  ctx.font = `${t.bold ? 700 : 400} ${t.size}px ${FONTS[t.font]}`;
+  ctx.font = `${t.italic ? "italic " : ""}${t.weight} ${t.size}px ${FONTS[t.font]}`;
   const lines = t.text.split("\n");
   const lh = t.size * 1.2;
   const widths = lines.map((l) => ctx.measureText(l).width);
@@ -706,16 +724,18 @@ function paintText(ctx, t) {
     ctx.fill();
   }
   ctx.textBaseline = "middle";
-  ctx.textAlign = "center";
+  ctx.textAlign = t.align;
+  // The block stays centered on (x, y); lines align within it.
+  const lx = t.align === "left" ? left : t.align === "right" ? left + L.w : t.x;
   L.lines.forEach((line, i) => {
     const y = top + L.lh * (i + 0.5);
     if (t.outline) {
       ctx.lineJoin = "round"; ctx.lineWidth = Math.max(2, t.size / 7);
       ctx.strokeStyle = isLight(t.color) ? "#000" : "#fff";
-      ctx.strokeText(line, t.x, y);
+      ctx.strokeText(line, lx, y);
     }
     ctx.fillStyle = t.color;
-    ctx.fillText(line, t.x, y);
+    ctx.fillText(line, lx, y);
   });
   return { x: left, y: top, w: L.w, h: L.h };
 }
@@ -727,10 +747,11 @@ function isLight(hex) {
 
 export function textTool(A) {
   const t = {
-    text: "Your text", font: "sans", bold: true, color: "#ffffff", outline: true, box: false, boxColor: "#000000",
+    text: "Your text", font: "sans", weight: 700, italic: false, align: "center", color: A.colors.fg, outline: true, box: false, boxColor: A.colors.bg,
     size: Math.round(minSide(A.doc) / 10), x: A.doc.width / 2, y: A.doc.height / 2,
   };
   let drag = null, placed = true;
+  const textColors = swatches({ value: t.color, onChange: (v) => { t.color = v; A.redraw(); } });
   const area = h("textarea", { rows: 2, spellcheck: "true" }, t.text);
   area.addEventListener("input", () => { t.text = area.value; A.redraw(); });
   const btns = applyButtons(() => {
@@ -760,9 +781,13 @@ export function textTool(A) {
         { value: "mono", label: "Mono" }, { value: "hand", label: "Casual" },
       ], t.font, (v) => { t.font = v; A.redraw(); })),
       slider({ label: "Size", min: 8, max: Math.round(minSide(A.doc) / 2), value: t.size, onInput: (v) => { t.size = v; A.redraw(); } }),
-      swatches({ value: t.color, onChange: (v) => { t.color = v; A.redraw(); } }),
+      h("label", {}, "Weight", seg([
+        { value: 300, label: "Light" }, { value: 400, label: "Regular" }, { value: 600, label: "Semibold" }, { value: 700, label: "Bold" }, { value: 900, label: "Black" },
+      ], t.weight, (v) => { t.weight = v; A.redraw(); })),
+      h("label", {}, "Align", seg([{ value: "left", label: "Left" }, { value: "center", label: "Center" }, { value: "right", label: "Right" }], t.align, (v) => { t.align = v; A.redraw(); })),
+      textColors,
       h("div", { class: "row" },
-        h("label", { class: "checkbox" }, h("input", { type: "checkbox", checked: t.bold, onchange: (e) => { t.bold = e.target.checked; A.redraw(); } }), "Bold"),
+        h("label", { class: "checkbox" }, h("input", { type: "checkbox", checked: t.italic, onchange: (e) => { t.italic = e.target.checked; A.redraw(); } }), "Italic"),
         h("label", { class: "checkbox" }, h("input", { type: "checkbox", checked: t.outline, onchange: (e) => { t.outline = e.target.checked; A.redraw(); } }), "Outline"),
         h("label", { class: "checkbox" }, h("input", { type: "checkbox", checked: t.box, onchange: (e) => { t.box = e.target.checked; A.redraw(); } }), "Background")),
       h("p", { class: "hint" }, "Drag the text on the photo to move it."),
@@ -878,7 +903,7 @@ export function rotateTool(A) {
   const scopeSeg = seg([{ value: "image", label: "Whole image" }, { value: "layer", label: "Current layer" }], scope, (v) => { scope = v; angleSlider.set(0); angle = 0; A.setSource(null); });
   const scopeRow = h("label", {}, "Apply to", scopeSeg);
   const run = (fnImage, fnLayer) => {
-    if (layerOnly()) A.doc.commit(fnLayer(A.doc.canvas), {});
+    if (layerOnly()) { if (guard(A, "position")) A.doc.commit(fnLayer(A.doc.canvas), {}); }
     else { A.doc.commitAll(fnImage); A.view.fit(); }
   };
   const preview = () => {
@@ -932,8 +957,20 @@ function thumb(layer, w, hgt) {
 const EYE = '<svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
 const EYE_OFF = '<svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 5.1A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
 
+const LOCK_ICONS = {
+  alpha: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 2"/><rect x="7" y="7" width="5" height="5" fill="currentColor"/><rect x="12" y="12" width="5" height="5" fill="currentColor"/></svg>',
+  pixels: '<svg viewBox="0 0 24 24"><path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L11 15.8 8.2 13z"/><path d="M7 14c-2 0-3 1.5-3 3 0 1.2-.8 2.2-2 3 3 1 7 .5 8-3z"/></svg>',
+  position: '<svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M12 2l-3 3M12 2l3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3"/></svg>',
+  all: '<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+};
+const LOCKS = [
+  ["alpha", "Transparency", "Lock transparent pixels: paint only where the layer already has pixels"],
+  ["pixels", "Pixels", "Lock image pixels: no painting or editing"],
+  ["position", "Position", "Lock position: no moving or transforming"],
+  ["all", "All", "Lock all: no changes at all"],
+];
+
 export function layersTool(A) {
-  let moving = false, drag = null;
   const list = h("ol", { class: "layers", "aria-label": "Layers (top first)" });
   const opacity = slider({
     label: "Opacity", min: 0, max: 100, value: 100, format: (v) => `${v}%`,
@@ -941,17 +978,20 @@ export function layersTool(A) {
     onChange: () => endLive(),
   });
   const blend = h("select", { "aria-label": "Blend mode" }, BLEND_MODES.map(([v, label]) => h("option", { value: v }, label)));
-  blend.onchange = () => A.doc.setLayerProps(A.doc.active, { blend: blend.value });
+  blend.onchange = () => { if (notAllLocked()) A.doc.setLayerProps(A.doc.active, { blend: blend.value }); else blend.value = A.doc.layer.blend; };
+  const lockRow = h("div", { class: "lock-row" });
+  const notAllLocked = () => { if (A.doc.layer.lock?.all) { A.toast("This layer is fully locked."); return false; } return true; };
 
   // Live property edits record one undo step per gesture.
   let liveStarted = false;
   function liveProp(props) {
     const d = A.doc;
+    if (d.layer.lock?.all) return;
     if (!liveStarted) { d.record(); liveStarted = true; }
     d.layers[d.active] = { ...d.layer, ...props };
     A.refreshView();
   }
-  function endLive() { if (liveStarted) { liveStarted = false; A.doc.emit(); } }
+  function endLive() { if (liveStarted) { liveStarted = false; A.doc.emit(); } else render(); }
 
   const btn = (label, title, onclick, cls = "") => h("button", { title, "aria-label": title, class: cls, onclick }, label);
   const addBlank = () => A.doc.change((d) => {
@@ -965,22 +1005,44 @@ export function layersTool(A) {
   });
   const remove = () => {
     if (!A.doc.hasLayers) return A.toast("An image needs at least one layer.");
+    if (!notAllLocked()) return;
     A.doc.change((d) => { d.layers.splice(d.active, 1); d.active = Math.min(d.active, d.layers.length - 1); });
+  };
+  const clear = () => {
+    if (!guard(A)) return;
+    A.doc.commit(makeCanvas(A.doc.width, A.doc.height), {});
   };
   const moveBy = (dir) => {
     const d = A.doc, j = d.active + dir;
     if (j < 0 || j >= d.layers.length) return;
     d.change((d) => { [d.layers[d.active], d.layers[j]] = [d.layers[j], d.layers[d.active]]; d.active = j; });
   };
+  const flatInto = (layers) => {
+    const d = A.doc, c = makeCanvas(d.width, d.height), x = c.getContext("2d");
+    for (const l of layers) { if (!l.visible) continue; x.globalAlpha = l.opacity; x.globalCompositeOperation = l.blend; x.drawImage(l.canvas, 0, 0); }
+    return c;
+  };
   const mergeDown = () => {
     const d = A.doc;
     if (d.active === 0) return A.toast("There's no layer below to merge into.");
+    const below = d.layers[d.active - 1];
+    if (below.lock?.all || below.lock?.pixels) return A.toast(`"${below.name}" is locked.`);
     d.change((d) => {
       const top = d.layers[d.active], below = d.layers[d.active - 1];
       const c = copyCanvas(below.canvas), x = c.getContext("2d");
       if (top.visible) { x.globalAlpha = top.opacity; x.globalCompositeOperation = top.blend; x.drawImage(top.canvas, 0, 0); }
       d.layers.splice(d.active - 1, 2, { ...below, canvas: c, meta: {} });
       d.active -= 1;
+    });
+  };
+  const mergeVisible = () => {
+    const d = A.doc, vis = d.layers.filter((l) => l.visible);
+    if (vis.length < 2) return A.toast("Need at least two visible layers.");
+    d.change((d) => {
+      const merged = makeLayer(flatInto(d.layers), "Merged");
+      const firstVis = d.layers.findIndex((l) => l.visible);
+      d.layers = d.layers.filter((l, i) => !l.visible || i === firstVis).map((l, i, arr) => (l.visible ? merged : l));
+      d.active = d.layers.indexOf(merged);
     });
   };
   const flatten = () => {
@@ -991,8 +1053,10 @@ export function layersTool(A) {
     const name = prompt("Layer name", A.doc.layers[i].name);
     if (name && name.trim()) A.doc.setLayerProps(i, { name: name.trim().slice(0, 40) });
   };
-
-  const moveBtn = h("button", { class: "grow", onclick: () => { moving = !moving; moveBtn.classList.toggle("on", moving); A.setCursorStyle(moving ? "move" : ""); } }, "✥ Move layer");
+  const toggleLock = (key) => {
+    const d = A.doc, cur = d.layer.lock || {};
+    d.setLayerProps(d.active, { lock: { ...cur, [key]: !cur[key] } });
+  };
 
   function render() {
     const d = A.doc;
@@ -1001,7 +1065,8 @@ export function layersTool(A) {
       const l = d.layers[i];
       const eye = h("button", { class: "icon-btn eye", title: l.visible ? "Hide layer" : "Show layer", "aria-label": l.visible ? "Hide layer" : "Show layer", html: l.visible ? EYE : EYE_OFF });
       eye.onclick = (e) => { e.stopPropagation(); d.setLayerProps(i, { visible: !l.visible }); };
-      const name = h("span", { class: "lname", title: "Double-click to rename" }, l.name);
+      const locked = l.lock && Object.values(l.lock).some(Boolean);
+      const name = h("span", { class: "lname", title: "Double-click to rename" }, l.name, locked ? h("span", { class: "lock-ico", title: "Locked" }, "🔒") : null);
       const sub = h("span", { class: "lsub" }, [l.opacity < 1 ? `${Math.round(l.opacity * 100)}%` : "", l.blend !== "source-over" ? BLEND_MODES.find((b) => b[0] === l.blend)[1] : ""].filter(Boolean).join(" · "));
       const li = h("li", {
         class: `${i === d.active ? "active" : ""} ${l.visible ? "" : "hidden-layer"}`, tabindex: 0,
@@ -1013,9 +1078,13 @@ export function layersTool(A) {
     }
     opacity.set(Math.round(d.layer.opacity * 100));
     blend.value = d.layer.blend;
+    const lock = d.layer.lock || {};
+    lockRow.replaceChildren(...LOCKS.map(([key, label, title]) =>
+      h("button", { class: lock[key] ? "on" : "", title, "aria-pressed": lock[key] ? "true" : "false", onclick: () => toggleLock(key) },
+        h("span", { html: LOCK_ICONS[key], style: "display:contents" }), label)));
   }
 
-  const addInput = h("input", { type: "file", accept: "image/*", hidden: true });
+  const addInput = h("input", { type: "file", accept: "image/*,.psd", hidden: true });
   addInput.onchange = () => { const f = addInput.files[0]; addInput.value = ""; if (f) A.addImageLayer(f, f.name); };
 
   render();
@@ -1031,32 +1100,18 @@ export function layersTool(A) {
       h("div", { class: "layer-actions" },
         btn("↑ Up", "Move layer up", () => moveBy(1)),
         btn("↓ Down", "Move layer down", () => moveBy(-1)),
-        btn("Merge down", "Merge into the layer below", mergeDown),
+        btn("Clear", "Erase everything on this layer", clear),
+        btn("Merge ↓", "Merge into the layer below", mergeDown)),
+      h("div", { class: "layer-actions two" },
+        btn("Merge visible", "Merge all visible layers into one", mergeVisible),
         btn("Flatten", "Merge all layers into one", flatten)),
       h("div", { class: "sub" }, "Selected layer"),
       opacity,
       h("label", {}, "Blend mode", blend),
-      h("div", { class: "row" }, moveBtn),
-      h("p", { class: "hint" }, "Other tools edit the selected layer. Crop, resize, rotate and corners apply to the whole image. You can also paste or drop a photo to add it as a layer."),
+      h("label", {}, "Lock", lockRow),
+      h("p", { class: "hint" }, "Use the Move (V) and Transform (Ctrl+T) tools to position and scale layers. Paste or drop a photo to add it as a layer."),
       addInput,
     ],
     onDocChange: render,
-    get wantsPointer() { return moving; },
-    down(p) { drag = { start: p, base: A.doc.canvas }; },
-    move(p) {
-      if (!drag) return;
-      const dx = Math.round(p.x - drag.start.x), dy = Math.round(p.y - drag.start.y);
-      const c = makeCanvas(A.doc.width, A.doc.height);
-      c.getContext("2d").drawImage(drag.base, dx, dy);
-      drag.shifted = c; drag.dx = dx; drag.dy = dy;
-      A.setSource(c);
-    },
-    up() {
-      if (!drag) return;
-      const { shifted, dx, dy } = drag; drag = null;
-      A.setSource(null);
-      if (shifted && (dx || dy)) A.doc.commit(shifted, {});
-    },
-    cleanup() { A.setCursorStyle(""); },
   };
 }

@@ -25,6 +25,9 @@
       <img src="icons/icon.svg" alt="" width="22" height="22"><span>Photocairn</span>
     </a>
     <div class="top-actions">
+      <button class="icon-btn" id="btn-new" title="New blank image" aria-label="New blank image">
+        <svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 12v6M9 15h6"/></svg><span class="lbl">New</span>
+      </button>
       <button class="icon-btn" id="btn-open" title="Open image (Ctrl+O)" aria-label="Open image">
         <svg viewBox="0 0 24 24"><path d="M4 7h5l2 2h9v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg><span class="lbl">Open</span>
       </button>
@@ -38,6 +41,12 @@
       <button class="icon-btn needs-doc" id="btn-compare" title="Hold to compare with original (\)" aria-label="Compare with original">
         <svg viewBox="0 0 24 24"><path d="M12 3v18"/><rect x="3" y="5" width="18" height="14" rx="2"/></svg>
       </button>
+      <button class="icon-btn needs-doc hide-sm" id="btn-zoom-out" title="Zoom out (−)" aria-label="Zoom out">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M21 21l-5-5"/></svg>
+      </button>
+      <button class="icon-btn needs-doc hide-sm" id="btn-zoom-in" title="Zoom in (+)" aria-label="Zoom in">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M8 11h6M11 8v6M21 21l-5-5"/></svg>
+      </button>
       <button class="icon-btn needs-doc hide-sm" id="btn-fit" title="Fit to screen (0)" aria-label="Fit to screen">
         <svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
       </button>
@@ -49,17 +58,37 @@
   </header>
 
   <nav class="tools needs-doc" id="tools" aria-label="Tools">
-    <button data-tool="cutout"><svg viewBox="0 0 24 24"><path d="M12 3c3 0 5 2.5 5 5.5S14.5 14 12 14s-5-2.5-5-5.5S9 3 12 3z"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/><path d="M3 3l3 3M21 3l-3 3" stroke-dasharray="2 2"/></svg><span>Remove BG</span></button>
-    <button data-tool="crop"><svg viewBox="0 0 24 24"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg><span>Crop</span></button>
-    <button data-tool="rotate"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v5h5"/></svg><span>Rotate</span></button>
-    <button data-tool="resize"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg><span>Resize</span></button>
-    <button data-tool="adjust"><svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>Adjust</span></button>
-    <button data-tool="looks"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="5"/><circle cx="15" cy="9" r="5"/><circle cx="12" cy="15" r="5"/></svg><span>Filters</span></button>
-    <button data-tool="redact"><svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="8" rx="1"/><path d="M7 8v8M11 8v8M15 8v8M19 8v8"/></svg><span>Blur out</span></button>
-    <button data-tool="draw"><svg viewBox="0 0 24 24"><path d="M4 20c4 0 4-4 8-4M14.5 5.5l4 4L10 18l-5 1 1-5z"/></svg><span>Draw</span></button>
-    <button data-tool="text"><svg viewBox="0 0 24 24"><path d="M5 6V4h14v2M12 4v16M9 20h6"/></svg><span>Text</span></button>
-    <button data-tool="layers"><svg viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg><span>Layers</span></button>
-    <button data-tool="frame"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><rect x="7" y="7" width="10" height="10" rx="2"/></svg><span>Corners</span></button>
+    <div class="tgroup" aria-hidden="true">Edit</div>
+    <button data-tool="move" title="Move (V)"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M12 2l-3 3M12 2l3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3"/></svg><span>Move</span></button>
+    <button data-tool="select" title="Select (M)"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="3 3"/></svg><span>Select</span></button>
+    <button data-tool="transform" title="Transform (Ctrl+T)"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14"/><rect x="3" y="3" width="4" height="4" fill="currentColor"/><rect x="17" y="3" width="4" height="4" fill="currentColor"/><rect x="3" y="17" width="4" height="4" fill="currentColor"/><rect x="17" y="17" width="4" height="4" fill="currentColor"/></svg><span>Transform</span></button>
+    <button data-tool="crop" title="Crop (C)"><svg viewBox="0 0 24 24"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg><span>Crop</span></button>
+    <button data-tool="rotate" title="Rotate"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v5h5"/></svg><span>Rotate</span></button>
+    <button data-tool="resize" title="Resize"><svg viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg><span>Resize</span></button>
+    <div class="tgroup" aria-hidden="true">Paint</div>
+    <button data-tool="brush" title="Brush (B)"><svg viewBox="0 0 24 24"><path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L11 15.8 8.2 13z"/><path d="M7 14c-2 0-3 1.5-3 3 0 1.2-.8 2.2-2 3 3 1 7 .5 8-3z"/></svg><span>Brush</span></button>
+    <button data-tool="pencil" title="Pencil (N)"><svg viewBox="0 0 24 24"><path d="M15 4l5 5L9 20H4v-5z"/><path d="M13 6l5 5"/></svg><span>Pencil</span></button>
+    <button data-tool="eraser" title="Eraser (E)"><svg viewBox="0 0 24 24"><path d="M7 21h13"/><path d="M5 16l9.5-9.5a2 2 0 0 1 2.8 0l2.2 2.2a2 2 0 0 1 0 2.8L13 18H7z"/><path d="M9 11l5 5"/></svg><span>Eraser</span></button>
+    <button data-tool="fill" title="Bucket (K)"><svg viewBox="0 0 24 24"><path d="M5 11l7-7 7 7-7 7z"/><path d="M5 11h14"/><path d="M20 15s2 2.5 2 3.5a2 2 0 0 1-4 0c0-1 2-3.5 2-3.5z"/></svg><span>Bucket</span></button>
+    <button data-tool="gradient" title="Gradient (G)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18" opacity=".5"/><path d="M9 3v18" opacity=".3"/></svg><span>Gradient</span></button>
+    <button data-tool="eyedropper" title="Picker (I)"><svg viewBox="0 0 24 24"><path d="M19 3a2.8 2.8 0 0 1 2 4.8L18 11l-6-6 3.2-3A2.8 2.8 0 0 1 19 3z"/><path d="M12 5l7 7M14 8l-9 9-2 4 4-2 9-9"/></svg><span>Picker</span></button>
+    <button data-tool="shapes" title="Shapes (U)"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="10" height="10" rx="1"/><circle cx="16" cy="16" r="5"/></svg><span>Shapes</span></button>
+    <button data-tool="text" title="Text (T)"><svg viewBox="0 0 24 24"><path d="M5 6V4h14v2M12 4v16M9 20h6"/></svg><span>Text</span></button>
+    <div class="tgroup" aria-hidden="true">Photo</div>
+    <button data-tool="cutout" title="Remove BG"><svg viewBox="0 0 24 24"><path d="M12 3c3 0 5 2.5 5 5.5S14.5 14 12 14s-5-2.5-5-5.5S9 3 12 3z"/><path d="M4 21c1-4 4.5-6 8-6s7 2 8 6"/></svg><span>Remove BG</span></button>
+    <button data-tool="adjust" title="Adjust"><svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>Adjust</span></button>
+    <button data-tool="looks" title="Filters"><svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="5"/><circle cx="15" cy="9" r="5"/><circle cx="12" cy="15" r="5"/></svg><span>Filters</span></button>
+    <button data-tool="redact" title="Blur out"><svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="8" rx="1"/><path d="M7 8v8M11 8v8M15 8v8M19 8v8"/></svg><span>Blur out</span></button>
+    <button data-tool="frame" title="Corners"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><rect x="7" y="7" width="10" height="10" rx="2"/></svg><span>Corners</span></button>
+    <div class="tgroup sep-only" aria-hidden="true"></div>
+    <button data-tool="layers" title="Layers (L)"><svg viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></svg><span>Layers</span></button>
+    <div class="color-well" aria-label="Colors">
+      <button id="fg-well" class="well fg" title="Main color (click to change)" aria-label="Main color"></button>
+      <button id="bg-well" class="well bg" title="Second color (click to change)" aria-label="Second color"></button>
+      <button id="swap-colors" class="mini" title="Swap colors (X)" aria-label="Swap colors"><svg viewBox="0 0 24 24"><path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></svg></button>
+      <button id="reset-colors" class="mini reset" title="Black and white (D)" aria-label="Reset colors"></button>
+      <input type="color" id="fg-input" tabindex="-1"><input type="color" id="bg-input" tabindex="-1">
+    </div>
   </nav>
 
   <main class="workspace">
@@ -72,8 +101,8 @@
         <img src="icons/icon.svg" alt="" width="56" height="56">
         <h1>Quick photo edits, <em>privately</em>.</h1>
         <p>Remove backgrounds, crop, resize, adjust, blur out details, add text and convert. <strong>No ads. No account. Nothing is uploaded</strong>: your photo never leaves this device.</p>
-        <button class="primary big" id="btn-open-2">Choose a photo</button>
-        <p class="hint"><span class="hide-touch">or drop it here, or paste with <kbd>Ctrl</kbd>+<kbd>V</kbd></span><span class="show-touch">JPG, PNG, WebP, AVIF, GIF</span></p>
+        <div class="row-center"><button class="primary big" id="btn-open-2">Choose a photo</button><button class="big" id="btn-new-2">New blank image</button></div>
+        <p class="hint"><span class="hide-touch">or drop it here, or paste with <kbd>Ctrl</kbd>+<kbd>V</kbd>. Opens JPG, PNG, WebP and PSD.</span><span class="show-touch">JPG, PNG, WebP, PSD, AVIF, GIF</span></p>
       </div>
       <ul class="features">
         <li><b>Remove background</b> with AI that runs in your browser</li>
@@ -87,14 +116,14 @@
     <aside class="panel needs-doc" id="panel" aria-live="polite"></aside>
   </main>
 
-  <input type="file" id="file" accept="image/*" hidden>
+  <input type="file" id="file" accept="image/*,.psd,image/vnd.adobe.photoshop" hidden>
   <div class="toast" id="toast" role="status"></div>
 </div>
 
 <template id="tpl-export">
   <label>Format
     <div class="seg" data-name="format">
-      <button data-v="image/png">PNG</button><button data-v="image/jpeg">JPG</button><button data-v="image/webp">WebP</button>
+      <button data-v="image/png">PNG</button><button data-v="image/jpeg">JPG</button><button data-v="image/webp">WebP</button><button data-v="image/vnd.adobe.photoshop" title="Photoshop file with layers">PSD</button>
     </div>
   </label>
   <label class="q-row"><span class="lab">Quality <output></output></span><input type="range" name="quality" min="10" max="100" value="85"></label>

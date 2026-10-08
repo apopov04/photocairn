@@ -57,6 +57,9 @@ export const BLEND_MODES = [
 ];
 
 let layerSeq = 0;
+// Photoshop-style locks: alpha = transparent pixels, pixels = image pixels,
+// position = moving/transforming, all = everything.
+export const NO_LOCK = Object.freeze({ alpha: false, pixels: false, position: false, all: false });
 /**
  * A layer is a full-document-size canvas plus display properties. Layer
  * objects are treated as immutable snapshots: edits replace the object (and a
@@ -64,10 +67,19 @@ let layerSeq = 0;
  * can keep references instead of pixel copies.
  */
 export function makeLayer(canvas, name, props = {}) {
-  return { id: ++layerSeq, name, canvas, visible: true, opacity: 1, blend: "source-over", meta: {}, ...props };
+  return { id: ++layerSeq, name, canvas, visible: true, opacity: 1, blend: "source-over", meta: {}, lock: NO_LOCK, ...props };
 }
 
 export class Doc {
+  /** Build a document from existing layers (e.g. an opened PSD). */
+  static fromLayers(layers, width, height, name) {
+    const d = new Doc(makeCanvas(width, height), name);
+    d.layers = layers;
+    d.active = layers.length - 1;
+    d.original = copyCanvas(d.composite());
+    return d;
+  }
+
   constructor(canvas, name = "image") {
     this.width = canvas.width;
     this.height = canvas.height;
@@ -80,6 +92,9 @@ export class Doc {
     this.listeners = new Set();
     this.version = 0;
     this._composite = null;
+    // Current selection: null, or { mask: canvas (alpha = selected), shapes: [...] }.
+    // Not part of undo history; cleared whenever the image size changes.
+    this.selection = null;
   }
 
   /* ---- active layer shortcuts (what most tools edit) ---- */
@@ -117,6 +132,7 @@ export class Doc {
     return { layers: this.layers.slice(), active: this.active, width: this.width, height: this.height };
   }
   restore(s) {
+    if (s.width !== this.width || s.height !== this.height) this.selection = null;
     this.layers = s.layers; this.active = s.active; this.width = s.width; this.height = s.height;
   }
   record() {
@@ -144,8 +160,9 @@ export class Doc {
   commitAll(fn) {
     this.record();
     this.layers = this.layers.map((l, i) => ({ ...l, canvas: fn(l.canvas, i), meta: {} }));
-    this.width = this.layers[0].canvas.width;
-    this.height = this.layers[0].canvas.height;
+    const w = this.layers[0].canvas.width, hgt = this.layers[0].canvas.height;
+    if (w !== this.width || hgt !== this.height) this.selection = null;
+    this.width = w; this.height = hgt;
     this.emit();
   }
 

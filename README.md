@@ -14,27 +14,46 @@ Photocairn is a fast, focused editor for exactly those jobs. **Everything runs o
 
 ## What it does
 
-- **Remove background.** AI cutout that runs locally. Choose *Fast* (4.6 MB model) or *Best quality* (44 MB, cached after the first use). You can then:
-  - keep the background transparent, swap in a solid color or blur the original background
-  - touch up the edges with *Erase* and *Restore* brushes
-- **Layers.** Stack photos, text and drawings. Each layer can be shown or hidden, renamed, reordered, duplicated, moved, merged or flattened, and has its own opacity and blend mode (Multiply, Screen, Overlay, Soft light and 12 more). Paste or drop a photo to add it as a layer. Other tools edit the selected layer; crop, resize, rotate and corners apply to the whole image.
-- **Crop.** Free crop or presets (1:1, 4:5, 3:2, 16:9, 9:16), and straighten with an automatic crop.
-- **Rotate & flip.** Rotate 90° left or right, flip horizontally or vertically, or rotate by any angle. Works on the whole image or just the current layer.
-- **Resize.** By pixels or percent, with one-tap sizes (1080 px, 1920 px, 512 px). Downscaling uses multiple steps so results stay sharp.
-- **Adjust.** Brightness, contrast, exposure, highlights, shadows, saturation, warmth, tint, sharpen and soften.
-- **Filters.** Mono, Sepia, Vivid, Warm, Cool, Fade, Noir, Vintage and Invert, each with a strength slider.
-- **Blur out.** Drag over faces, plates or private details to blur, pixelate or cover them with a solid box.
-- **Draw.** Pen, highlighter, arrows, lines, boxes and circles, for marking up screenshots.
-- **Text.** Captions with outline and background options. Drag to place. Each text goes on its own layer.
-- **Corners & border.** Rounded corners, circle crop for profile pictures, and colored or transparent borders.
-- **Save.** PNG, JPG or WebP, with a quality slider, an output size slider and a live file-size estimate. You can also copy to the clipboard. **Location and camera data (EXIF) are always removed.**
-- **Editing basics:**
-  - undo/redo
-  - hold to compare with the original
-  - zoom and pan (pinch on phones)
-  - open by drag & drop or paste
-  - keyboard shortcuts
-  - works offline and can be installed as an app
+**Files**
+- Open PNG, JPG, WebP, AVIF, GIF and **PSD** (with layers). You can also drag & drop, paste from the clipboard, or start a **new blank image** (with presets; white, transparent or colored background).
+- Save as PNG, JPG, WebP or **layered PSD** (opens in Photoshop, GIMP and Photopea), with quality and size sliders and a live file-size estimate, or copy to the clipboard. **Location and camera data (EXIF) are always removed.**
+
+**Edit**
+- **Move** (V): drag a layer, or just the selected pixels. Arrow keys nudge.
+- **Select** (M): rectangle and ellipse marquee with add, subtract and intersect. Also select all, invert, crop to selection, copy or cut to a new layer, fill, and delete. Painting, fills, adjustments and filters stay inside the selection.
+- **Free transform** (Ctrl+T): scale, rotate, flip and move a layer or selection, using handles or exact numbers.
+- **Crop**: free or preset ratios, plus straighten.
+- **Rotate & flip**: 90° steps, horizontal/vertical flip or any angle, applied to the whole image or one layer.
+- **Resize**: image size (scale), plus **canvas size** with an anchor to add space around the image without scaling it.
+
+**Paint**
+- **Brush** (B): size, hardness, opacity and color.
+- **Pencil** (N): hard, pixel-exact lines.
+- **Eraser** (E): soft or block.
+- **Paint bucket** (K): tolerance, contiguous or global fill, and sample one layer or all layers.
+- **Gradient** (G): linear or radial, fading to the second color or to transparent.
+- **Eyedropper** (I): average 1, 3×3 or 5×5 pixels.
+- **Shapes** (U): line, arrow, rectangle, ellipse (outlined or filled) and highlighter.
+- **Text** (T): font, size, weight, italic, alignment, color, outline and background box. Each text goes on its own layer.
+- Main and second colors in the toolbar. X swaps them, D resets to black and white. Alt+click with the brush picks a color.
+
+**Layers**
+- Create, delete, duplicate, rename, reorder, show/hide, clear, merge down, merge visible and flatten.
+- Each layer has its own opacity and blend mode (16 modes).
+- **Locks** like Photoshop's: transparent pixels, image pixels, position, or all.
+
+**Photo**
+- **Remove background** with AI that runs on your device. *Fast* uses a 4.6 MB model and *Best quality* a 44 MB one. Afterwards you can pick a solid or blurred background and touch up with Erase/Restore brushes.
+- **Adjust**: brightness, contrast, exposure, highlights, shadows, saturation, warmth, tint, sharpen and soften.
+- **Filters**: Mono, Sepia, Vivid, Warm, Cool, Fade, Noir, Vintage and Invert, with a strength slider.
+- **Blur out** faces, plates and private details by blurring, pixelating or covering them with a solid box.
+- **Corners & border**: rounded corners, circle crop, and borders.
+
+**Everywhere**
+- Undo/redo.
+- Hold to compare with the original.
+- Zoom in/out, fit, 100% and pan (pinch on phones).
+- Works offline and can be installed as an app.
 
 ## Privacy
 
@@ -44,17 +63,49 @@ Photocairn is a fast, focused editor for exactly those jobs. **Everything runs o
 
 ## Keyboard shortcuts
 
-- `Ctrl/⌘ + O`: open
-- `Ctrl/⌘ + S`: save
-- `Ctrl/⌘ + Z`: undo
-- `Ctrl/⌘ + Shift + Z` or `Ctrl/⌘ + Y`: redo
+**Tools**
+- `V`: Move
+- `M`: Select
+- `Ctrl+T`: Transform
+- `C`: Crop
+- `B`: Brush
+- `N`: Pencil
+- `E`: Eraser
+- `K`: Paint bucket
+- `G`: Gradient
+- `I`: Eyedropper
+- `U`: Shapes
+- `T`: Text
+- `L`: Layers
+
+**Colors and brushes**
+- `X`: swap colors
+- `D`: reset colors to black and white
+- `[` / `]`: brush size
+
+**Selection**
+- `Ctrl+A`: select all
+- `Ctrl+D`: deselect
+- `Ctrl+Shift+I`: invert selection
+- `Ctrl+J`: copy the selection to a new layer
+- `Delete`: delete the selected pixels
+
+**File and history**
+- `Ctrl+O`: open
+- `Ctrl+S`: save
+- `Ctrl+Z`: undo
+- `Ctrl+Shift+Z` or `Ctrl+Y`: redo
+
+**View**
 - `0`: fit to screen
-- `1`: actual size
+- `1`: 100%
 - `+` / `−`: zoom
 - Hold `Space`: pan
 - Hold `\`: compare with the original
-- `Enter`: apply crop
-- `Esc`: close the tool
+
+**In tools**
+- `Enter`: apply
+- `Esc`: cancel, or deselect
 
 ## Run it yourself
 
@@ -78,7 +129,9 @@ npm i && CHROME=/path/to/chrome npm run test:e2e   # browser end-to-end scenario
 
 - `js/ops.js`: pure pixel operations (adjustments, filters, blur, sharpen, pixelate, mask handling). They don't touch the DOM, so they're unit-tested in Node.
 - `js/editor.js`: the document model (layers plus memory-capped undo history) and the zoomable viewport. Layers are immutable snapshots, so undo stores references instead of pixel copies.
-- `js/tools.js`: one factory per tool. Each one builds its panel and handles pointer input in image coordinates.
+- `js/tools.js`: the crop, resize, adjust, filters, text, layers and other panels. Each tool is a factory that builds its panel and handles pointer input in image coordinates.
+- `js/paint.js`: the brush engine (stamped strokes with hardness and per-stroke opacity), pencil, eraser, shapes, paint bucket, gradient, eyedropper, selection, move and free transform. All pixel edits go through one function, which respects the selection and layer locks.
+- `js/psd.js`: PSD import/export with [ag-psd](https://github.com/Agamnentzar/ag-psd), loaded only when needed.
 - `js/bg-worker.js`: background removal in a Web Worker. It runs [U²-Net](https://github.com/xuebinqin/U-2-Net) models with [ONNX Runtime Web](https://onnxruntime.ai/), and the mask is upscaled and applied on a canvas.
 - `sw.js`: service worker for offline use.
 

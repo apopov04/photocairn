@@ -1,0 +1,11 @@
+addlayer:tests/e2e/sample.jpg
+range:0:70
+select:#panel select:screen
+clicktext:Pixels
+click:#btn-export
+wait:500
+clicktext:PSD
+wait:2500
+eval:document.querySelector("#export-meta").textContent
+clicktext:Download
+wait:2500
