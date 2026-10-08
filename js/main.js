@@ -292,8 +292,8 @@ const FACTORIES = {
   cutout: T.cutoutTool, crop: T.cropTool, resize: T.resizeTool, adjust: T.adjustTool,
   looks: T.looksTool, redact: T.redactTool, text: T.textTool, frame: T.frameTool,
   layers: T.layersTool, rotate: T.rotateTool,
-  move: P.moveTool, select: (a) => P.selectTool(a, makeLayer), transform: P.transformTool,
-  paint: (a) => P.paintTool(a, brushVariant, selectTool), eraser: (a) => P.paintTool(a, "eraser"),
+  move: P.moveTool, select: (a) => P.selectTool(a, makeLayer, (v) => selGroup.set(v)), transform: P.transformTool,
+  paint: (a) => P.paintTool(a, brushGroup.value, selectTool), eraser: (a) => P.paintTool(a, "eraser"),
   shapes: P.shapesTool, fill: P.fillTool, gradient: P.gradientTool, eyedropper: P.eyedropperTool,
   export: exportTool,
 };
@@ -306,9 +306,15 @@ let railTool = "move";
 function selectTool(name, toggle = false) {
   if (!doc) return;
   if (!name) name = railTool;
-  if (BRUSH_KEYS.includes(name)) { // a variant of the brush group
-    if (name !== brushVariant) { setBrushVariant(name); toggle = true; }
-    name = "paint";
+  const grp = GROUPS.find((g) => g.has(name));
+  if (grp) { // a variant of a tool group, e.g. "pen" or "lasso"
+    const v = name;
+    name = grp.tool;
+    if (v !== grp.value) {
+      grp.set(v);
+      if (toolName === name && tool?.setKind) { tool.setKind(v); showTab("props"); return; }
+      toggle = true;
+    }
   }
   if (name === toolName && !toggle) { showTab("props"); return; }
   if (tool) { tool.cleanup?.(); }
@@ -354,65 +360,76 @@ $("#tools").addEventListener("click", (e) => {
   if (b && doc) selectTool(b.dataset.tool);
 });
 
-/* ------------------- brush group: brush, pencil, pen, highlighter ------------------- */
+/* ------------- tool groups: several tools share one rail button ------------- */
 
-const BRUSH_KEYS = P.BRUSHES.map((b) => b.value);
-const BRUSH_ICONS = {
-  brush: '<path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L11 15.8 8.2 13z"/><path d="M7 14c-2 0-3 1.5-3 3 0 1.2-.8 2.2-2 3 3 1 7 .5 8-3z"/>',
-  pencil: '<path d="M15 4l5 5L9 20H4v-5z"/><path d="M13 6l5 5"/>',
-  pen: '<path d="M20 4c-5 0-9 2-11 6l-5 10 10-5c4-2 6-6 6-11z"/><path d="M4 20l6.5-6.5"/><circle cx="12" cy="12" r="1.5"/>',
-  highlighter: '<path d="M15 3l6 6-8 8-6-6z"/><path d="M7 11l-2 5 3 3 5-2"/><path d="M5 16l-2.5 2.5L4 20h4"/><path d="M14 21h7" opacity=".5"/>',
-};
-let brushVariant = BRUSH_KEYS.includes(localStorage.getItem("pc-brush-tool")) ? localStorage.getItem("pc-brush-tool") : "brush";
-const paintBtn = $('#tools button[data-tool="paint"]');
-const brushInfo = (v) => P.BRUSHES.find((b) => b.value === v);
-function setBrushVariant(v) {
-  brushVariant = v;
-  localStorage.setItem("pc-brush-tool", v);
-  const b = brushInfo(v);
-  paintBtn.innerHTML = `<svg viewBox="0 0 24 24">${BRUSH_ICONS[v]}</svg><span>${b.label}</span>`;
-  paintBtn.title = `${b.label} (${b.key || "B"}). Right-click or long-press for more`;
-  paintBtn.setAttribute("aria-label", b.label);
+// A group's rail button shows its current variant (icon, label, tooltip) and a
+// corner mark; right-click or long-press opens a flyout to swap variants. Its
+// shortcut key selects the group, and pressing it again (or with Shift) cycles.
+// selectTool(variant) switches variant: tools with setKind() switch in place,
+// others are rebuilt.
+const GROUPS = [];
+function toolGroup({ tool, name, variants, icons, storage, key, tip = "" }) {
+  const btn = $(`#tools button[data-tool="${tool}"]`);
+  const keys = variants.map((v) => v.value);
+  const saved = localStorage.getItem(storage);
+  const g = {
+    tool, name, variants, icons, btn, key,
+    value: keys.includes(saved) ? saved : keys[0],
+    has: (v) => keys.includes(v),
+    next: () => keys[(keys.indexOf(g.value) + 1) % keys.length],
+    set(v) {
+      g.value = v;
+      localStorage.setItem(storage, v);
+      const it = variants.find((x) => x.value === v);
+      btn.innerHTML = `<svg viewBox="0 0 24 24">${icons[v]}</svg><span>${it.label}</span>`;
+      btn.title = `${tip}${it.label} (${it.key || key}). ${key} again for the next one; right-click or long-press for more`;
+      btn.setAttribute("aria-label", tip + it.label);
+    },
+  };
+  btn.classList.add("group");
+  btn.setAttribute("aria-haspopup", "menu");
+  g.set(g.value);
+  btn.addEventListener("contextmenu", (e) => { e.preventDefault(); if (flyout?.group !== g) openFlyout(g); });
+  btn.addEventListener("pointerdown", (e) => {
+    if (e.button) return;
+    longPressed = false;
+    const x0 = e.clientX, y0 = e.clientY;
+    pressTimer = setTimeout(() => { longPressed = true; openFlyout(g); }, 450);
+    const cancel = (ev) => {
+      if (ev.type === "pointermove" && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 10) return;
+      clearTimeout(pressTimer);
+      for (const t of ["pointermove", "pointerup", "pointercancel"]) btn.removeEventListener(t, cancel);
+    };
+    for (const t of ["pointermove", "pointerup", "pointercancel"]) btn.addEventListener(t, cancel);
+  });
+  GROUPS.push(g);
+  return g;
 }
-setBrushVariant(brushVariant);
-const nextBrush = () => BRUSH_KEYS[(BRUSH_KEYS.indexOf(brushVariant) + 1) % BRUSH_KEYS.length];
 
-// Flyout menu to swap variants: right-click, or long-press on touch.
+// The flyout menu (one at a time).
 let flyout = null, longPressed = false, pressTimer = 0;
 function closeFlyout() { flyout?.remove(); flyout = null; }
-function openFlyout() {
+function openFlyout(g) {
   if (!doc) return;
   closeFlyout();
-  flyout = h("ul", { class: "menu-pop tool-flyout", role: "menu", "aria-label": "Brush tools" }, P.BRUSHES.map((b) => h("li", {},
+  flyout = h("ul", { class: "menu-pop tool-flyout", role: "menu", "aria-label": g.name }, g.variants.map((v) => h("li", {},
     h("button", {
-      role: "menuitemradio", "aria-checked": String(b.value === brushVariant), class: b.value === brushVariant ? "on" : null,
-      onclick: () => { closeFlyout(); selectTool(b.value); },
-    }, h("span", { html: `<svg viewBox="0 0 24 24">${BRUSH_ICONS[b.value]}</svg>` }, b.label), b.key ? h("kbd", {}, b.key) : null))));
+      role: "menuitemradio", "aria-checked": String(v.value === g.value), class: v.value === g.value ? "on" : null,
+      onclick: () => { closeFlyout(); selectTool(v.value); },
+    }, h("span", { html: `<svg viewBox="0 0 24 24">${g.icons[v.value]}</svg>` }, v.label), v.key ? h("kbd", {}, v.key) : null))));
+  flyout.group = g;
   document.body.append(flyout);
   // Beside the button (left rail), or above it when that doesn't fit (bottom rail on phones).
-  const r = paintBtn.getBoundingClientRect(), fw = flyout.offsetWidth, fh = flyout.offsetHeight;
+  const r = g.btn.getBoundingClientRect(), fw = flyout.offsetWidth, fh = flyout.offsetHeight;
   let left = r.right + 4, top = r.top;
   if (top + fh > innerHeight - 4) { left = r.left; top = r.top - fh - 4; }
   flyout.style.left = `${Math.max(4, Math.min(left, innerWidth - fw - 4))}px`;
   flyout.style.top = `${Math.max(4, top)}px`;
 }
-paintBtn.addEventListener("contextmenu", (e) => { e.preventDefault(); if (!flyout) openFlyout(); });
-paintBtn.addEventListener("pointerdown", (e) => {
-  if (e.button) return;
-  longPressed = false;
-  const x0 = e.clientX, y0 = e.clientY;
-  pressTimer = setTimeout(() => { longPressed = true; openFlyout(); }, 450);
-  const cancel = (ev) => {
-    if (ev.type === "pointermove" && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 10) return;
-    clearTimeout(pressTimer);
-    for (const t of ["pointermove", "pointerup", "pointercancel"]) paintBtn.removeEventListener(t, cancel);
-  };
-  for (const t of ["pointermove", "pointerup", "pointercancel"]) paintBtn.addEventListener(t, cancel);
-});
 addEventListener("pointerdown", (e) => { if (flyout && !flyout.contains(e.target)) closeFlyout(); }, true);
 addEventListener("keydown", (e) => {
   if (!flyout) return;
-  if (e.key === "Escape") { e.stopPropagation(); closeFlyout(); paintBtn.focus(); return; }
+  if (e.key === "Escape") { e.stopPropagation(); const b = flyout.group.btn; closeFlyout(); b.focus(); return; }
   if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
   e.preventDefault(); e.stopPropagation();
   const items = [...flyout.querySelectorAll("button")], i = items.indexOf(document.activeElement);
@@ -420,6 +437,29 @@ addEventListener("keydown", (e) => {
 }, true);
 addEventListener("resize", closeFlyout);
 $("#tools").addEventListener("scroll", closeFlyout);
+
+// Brush group: brush, pencil, pen, highlighter.
+const brushGroup = toolGroup({
+  tool: "paint", name: "Brush tools", variants: P.BRUSHES, storage: "pc-brush-tool", key: "B",
+  icons: {
+    brush: '<path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L11 15.8 8.2 13z"/><path d="M7 14c-2 0-3 1.5-3 3 0 1.2-.8 2.2-2 3 3 1 7 .5 8-3z"/>',
+    pencil: '<path d="M15 4l5 5L9 20H4v-5z"/><path d="M13 6l5 5"/>',
+    pen: '<path d="M20 4c-5 0-9 2-11 6l-5 10 10-5c4-2 6-6 6-11z"/><path d="M4 20l6.5-6.5"/><circle cx="12" cy="12" r="1.5"/>',
+    highlighter: '<path d="M15 3l6 6-8 8-6-6z"/><path d="M7 11l-2 5 3 3 5-2"/><path d="M5 16l-2.5 2.5L4 20h4"/><path d="M14 21h7" opacity=".5"/>',
+  },
+});
+
+// Select group: rectangle, ellipse, lasso, polygon, magic wand (stored as pc-sel, read by the tool).
+const selGroup = toolGroup({
+  tool: "select", name: "Selection tools", variants: P.SEL_KINDS, storage: "pc-sel", key: "M", tip: "Select: ",
+  icons: {
+    rect: '<rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="3 3"/>',
+    ellipse: '<ellipse cx="12" cy="12" rx="9" ry="7" stroke-dasharray="3 3"/>',
+    lasso: '<path d="M8.5 13.8C6.4 12.9 5 11.1 5 9c0-3 3.6-5.5 8-5.5S21 6 21 9s-3.6 5.5-8 5.5c-1 0-2-.1-2.9-.4" stroke-dasharray="3 2.6"/><circle cx="9.2" cy="14.3" r="1.3"/><path d="M8.4 15.5c-1.2 1.4-2.9 2.2-2.9 3.8 0 1.3 1.2 2 2.5 1.5"/>',
+    polygon: '<path d="M5 6l11-2 4 9-7 7-9-4z" stroke-dasharray="3 2.6"/><circle cx="5" cy="6" r=".9"/><circle cx="16" cy="4" r=".9"/><circle cx="20" cy="13" r=".9"/><circle cx="13" cy="20" r=".9"/><circle cx="4" cy="16" r=".9"/>',
+    wand: '<path d="M3 21l11-11"/><path d="M12.5 8.5l3 3"/><path d="M17 3v3M17 12v3M11 9h0M20 9h3M13.5 5.5l-1-1M20.5 5.5l1-1M20.5 12.5l1 1"/>',
+  },
+});
 
 /* ------------------------------- right sidebar ------------------------------- */
 
@@ -586,15 +626,11 @@ addEventListener("keydown", (e) => {
   if (mod && k === "t") { e.preventDefault(); selectTool("transform", false); return; }
   if ((e.key === "Delete" || e.key === "Backspace") && !mod) { e.preventDefault(); P.clearSelection(A); return; }
   if (!mod && !e.altKey) {
-    // B selects the brush group; B again (or Shift+B) cycles through its variants.
-    if (k === "b") { selectTool(toolName === "paint" || e.shiftKey ? nextBrush() : "paint", false); return; }
-    const shortcut = { v: "move", m: "select", n: "pencil", e: "eraser", i: "eyedropper", k: "fill", g: "gradient", u: "shapes", t: "text", c: "crop" }[k];
+    // B / M select the brush / select group; pressing again (or with Shift) cycles through its variants.
+    const grp = GROUPS.find((g) => g.key.toLowerCase() === k);
+    if (grp) { selectTool(toolName === grp.tool || e.shiftKey ? grp.next() : grp.tool, false); return; }
+    const shortcut = { v: "move", n: "pencil", w: "wand", e: "eraser", i: "eyedropper", k: "fill", g: "gradient", u: "shapes", t: "text", c: "crop" }[k];
     if (shortcut) { selectTool(shortcut, false); return; }
-    if (k === "w") { // magic wand
-      localStorage.setItem("pc-sel", "wand");
-      if (toolName === "select") tool.setKind?.("wand"); else selectTool("select", false);
-      return;
-    }
     if (k === "l") { showTab("layers"); return; }
     if (k === "x") { swapColors(); return; }
     if (k === "d") { resetColors(); return; }
@@ -762,7 +798,7 @@ function openCanvasSize() {
 
 function shortcutsDialog() {
   const rows = [
-    ["Move / Select / Crop", "V / M / C"], ["Magic wand", "W"], ["Brush tools / Pencil / Eraser", "B / N / E"], ["Next brush tool (Pen, Highlighter…)", "B again / Shift+B"], ["Bucket / Gradient / Eyedropper", "K / G / I"],
+    ["Move / Select / Crop", "V / M / C"], ["Next selection type (Ellipse, Lasso…)", "M again / Shift+M"], ["Magic wand", "W"], ["Brush tools / Pencil / Eraser", "B / N / E"], ["Next brush tool (Pen, Highlighter…)", "B again / Shift+B"], ["Bucket / Gradient / Eyedropper", "K / G / I"],
     ["Shapes / Text", "U / T"], ["Free transform", "Ctrl+T"], ["Swap / reset colors", "X / D"], ["Brush size", "[ / ]"],
     ["Select all / Deselect / Invert", "Ctrl+A / Ctrl+D / Ctrl+Shift+I"], ["Copy / Cut / Paste", "Ctrl+C / Ctrl+X / Ctrl+V"],
     ["Selection to new layer", "Ctrl+J"], ["New layer / Merge down", "Ctrl+Shift+N / Ctrl+E"], ["Delete selected pixels", "Delete"],
