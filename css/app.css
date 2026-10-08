@@ -235,13 +235,33 @@ dialog input[type=number] { width: 100%; padding: 8px 10px; border: 1px solid va
 .color-well .mini { right: -4px; top: -4px; }
 .color-well .reset { top: auto; bottom: 0; right: auto; left: 0; width: 12px; height: 12px; }
 
-/* Right sidebar: tool options on top, layers below */
-.side { grid-area: side; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--line); background: var(--surface); }
+/* Right sidebar: tool options on top, then History, then Layers, with drag
+   handles between them (history.js). The tool options take what's left. */
+.side { grid-area: side; display: flex; flex-direction: column; min-height: 0; overflow: hidden; border-left: 1px solid var(--line); background: var(--surface); }
 .side-tabs { display: none; }
 .side .panel { width: auto; border: 0; box-shadow: none; }
-.side .props { flex: 1 1 auto; min-height: 120px; overflow-y: auto; padding: 12px 14px 16px; }
+.side .props { flex: 1 1 0; min-height: 90px; overflow-y: auto; padding: 12px 14px 16px; }
 .side .props:empty::before { content: "Choose a tool on the left."; color: var(--muted); font-size: 13px; }
-.side .layers-dock { flex: 0 0 auto; height: 42%; min-height: 220px; border-top: 1px solid var(--line); padding: 0; display: flex; flex-direction: column; gap: 0; overflow: hidden; }
+.side .history-dock, .side .layers-dock { flex: 0 1 auto; padding: 0; display: flex; flex-direction: column; gap: 0; overflow: hidden; }
+.side .history-dock { height: 24%; min-height: 64px; }
+.side .layers-dock { height: 40%; min-height: 184px; }
+/* Drag handles: a 1px line with a wider invisible grab area and a grip on hover */
+.split { flex: none; position: relative; z-index: 2; height: 9px; margin: -4px 0; cursor: row-resize; touch-action: none; outline: none; }
+.split::before { content: ""; position: absolute; left: 0; right: 0; top: calc(50% - .5px); height: 1px; background: var(--line); transition: background .12s; }
+.split::after { content: ""; position: absolute; left: calc(50% - 16px); top: calc(50% - 2.5px); width: 32px; height: 5px; border-radius: 3px; background: var(--muted); opacity: 0; transition: opacity .12s; }
+.split:hover::before, .split.dragging::before, .split:focus-visible::before { background: var(--accent); }
+.split:hover::after, .split.dragging::after, .split:focus-visible::after { opacity: .7; }
+@media (pointer: coarse) { .split { height: 17px; margin: -8px 0; } .split::after { opacity: .35; } }
+/* History */
+.history-panel { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.history { list-style: none; margin: 0; padding: 2px 8px 8px; flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; scrollbar-width: thin; }
+.history .hrow { width: 100%; justify-content: flex-start; gap: 8px; border: 0; background: transparent; padding: 4px 8px; border-radius: 6px; font-size: 13px; text-align: left; }
+.history .hrow.current { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); box-shadow: inset 3px 0 0 var(--accent); font-weight: 600; }
+.history .hrow.future { opacity: .45; }
+.history .hrow.future:hover { opacity: .75; }
+.history .hlabel { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history .hsub { flex: 0 1 auto; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; font-weight: 400; color: var(--muted); }
+.history .trimmed { padding: 3px 8px; font-size: 11px; font-style: italic; color: var(--muted); }
 .layers-panel { display: flex; flex-direction: column; min-height: 0; height: 100%; }
 .dock-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 4px; }
 .dock-head h2, .panel-head h2 { font-size: 12px !important; font-weight: 700 !important; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0; }
@@ -282,9 +302,11 @@ dialog input[type=number] { width: 100%; padding: 8px 10px; border: 1px solid va
   .side-tabs { display: flex; gap: 4px; padding: 6px 10px 0; }
   .side-tabs button { flex: 1; padding: 6px; font-size: 13px; border-radius: 8px; }
   .side-tabs button.on { background: var(--surface-2); border-color: var(--accent); }
-  .side .props, .side .layers-dock { height: auto; max-height: none; border-top: 0; flex: 1 1 auto; }
-  .side[data-tab="props"] .layers-dock, .side[data-tab="layers"] .props { display: none; }
-  .side .layers-dock { min-height: 0; }
+  .side .dock { height: auto !important; max-height: none; border-top: 0; flex: 1 1 auto; }
+  .side .split { display: none; }
+  .side:not([data-tab="props"]) .props, .side:not([data-tab="history"]) .history-dock, .side:not([data-tab="layers"]) .layers-dock { display: none; }
+  .side .layers-dock, .side .history-dock { min-height: 0; }
+  .history .hrow { padding: 7px 10px; }
 }
 .color-well .mini { right: -2px; top: -2px; padding: 1px; }
 .color-well .mini svg { width: 13px; height: 13px; }

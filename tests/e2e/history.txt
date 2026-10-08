@@ -1,0 +1,48 @@
+eval:document.querySelector("#history-dock").innerText
+tool:paint
+path:0.3:0.3:0.5:0.4:0.6:0.3
+tool:fill
+tap:0.2:0.8
+tool:gradient
+drag:0.2:0.2:0.8:0.8
+key:Control+Shift+N
+menu:Image:Flip horizontal
+tool:layers
+clicktext:Merge down
+tool:move
+drag:0.5:0.5:0.6:0.55
+eval:__photocairn.doc.history.map(e=>e.label).join(" | ")
+eval:[...document.querySelectorAll("#history-dock .hlabel")].map(e=>e.textContent).join(" | ")
+eval:document.querySelector("#history-dock .hsub")?.textContent
+shot:H1-history
+click:#history-dock button[data-i="4"]
+eval:[__photocairn.doc.undoStack.length, __photocairn.doc.redoStack.length, __photocairn.doc.layers.length, __photocairn.doc.stateLabel].join(" ")
+eval:[...document.querySelectorAll("#history-dock .hrow")].map(b=>b.className.replace("hrow ","")).join(",")
+eval:getComputedStyle(document.querySelector("#history-dock .hrow.future")).opacity
+shot:H2-back
+click:#history-dock button[data-i="6"]
+eval:[__photocairn.doc.undoStack.length, __photocairn.doc.redoStack.length, __photocairn.doc.layers.length, __photocairn.doc.stateLabel].join(" ")
+click:#history-dock button[data-i="0"]
+eval:[__photocairn.doc.undoStack.length, __photocairn.doc.redoStack.length, __photocairn.doc.layers.length, __photocairn.doc.stateLabel].join(" ")
+key:Control+Shift+z
+eval:document.querySelector("#history-dock .current .hlabel").textContent
+click:#history-dock button[data-i="7"]
+eval:document.querySelector("#history-dock .current .hlabel").textContent
+eval:["#panel","#history-dock","#layers-dock"].map(s=>Math.round(document.querySelector(s).getBoundingClientRect().height)).join(" ")
+eval:getComputedStyle(document.querySelector("#side .split")).cursor
+dragel:#side .split:0:-120
+dragel:#side .split ~ .split:0:-60
+eval:["#panel","#history-dock","#layers-dock"].map(s=>Math.round(document.querySelector(s).getBoundingClientRect().height)).join(" ")
+eval:localStorage.getItem("pc-side-sizes")
+shot:H3-resized
+reload
+eval:["#panel","#history-dock","#layers-dock"].map(s=>Math.round(document.querySelector(s).getBoundingClientRect().height)).join(" ")
+eval:document.querySelector("#history-dock").innerText
+shot:H4-reloaded
+dragel:#side .split:0:-2000
+eval:["#panel","#history-dock","#layers-dock"].map(s=>Math.round(document.querySelector(s).getBoundingClientRect().height)).join(" ")
+dragel:#side .split ~ .split:0:2000
+eval:["#panel","#history-dock","#layers-dock"].map(s=>Math.round(document.querySelector(s).getBoundingClientRect().height)).join(" ")
+shot:H5-extremes
+eval:(document.querySelector("#side .split").dispatchEvent(new MouseEvent("dblclick",{bubbles:true})), document.querySelector("#side .split ~ .split").dispatchEvent(new MouseEvent("dblclick",{bubbles:true})), localStorage.getItem("pc-side-sizes"))
+eval:["#panel","#history-dock","#layers-dock"].map(s=>Math.round(document.querySelector(s).getBoundingClientRect().height)).join(" ")

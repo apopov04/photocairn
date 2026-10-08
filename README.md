@@ -17,9 +17,9 @@ Photocairn is a fast, focused editor for exactly those jobs. **Everything runs o
 The layout will feel familiar if you've used Photoshop:
 - a **menu bar** (File, Edit, Image, Layer, Select, Filter, View, Help)
 - **tools** down the left
-- the selected tool's **options** at the top right, with the **Layers** panel below them
+- on the right, the selected tool's **options** on top, then **History**, then **Layers**. Drag the lines between them to change their heights (double-click a line to reset it); the sizes are remembered.
 
-On phones, the tools sit along the bottom and the options and layers share a tabbed sheet.
+On phones, the tools sit along the bottom and the options, history and layers share a tabbed sheet.
 
 **Files**
 - Open PNG, JPG, WebP, AVIF, GIF and **PSD** (with layers). You can also drag & drop, paste from the clipboard, or start a **new blank image** (with presets; white, transparent or colored background).
@@ -75,7 +75,7 @@ On phones, the tools sit along the bottom and the options and layers share a tab
 - **Corners & border**: rounded corners, circle crop, and borders.
 
 **Everywhere**
-- Undo/redo.
+- Undo/redo, and a **History** panel like Photoshop's: one row per step (Brush, Fill, Merge down…), starting with the opened image. Click any step to go back to it, or a dimmed later step to redo up to it. Up to about 400 MB of image data is kept; older steps are dropped first.
 - Hold to compare with the original.
 - Zoom in/out, fit, 100% and pan (pinch on phones).
 - Works offline and can be installed as an app.
@@ -146,7 +146,7 @@ Any static host works. To enable multi-threaded WebAssembly (faster background r
 ## Tests
 
 ```bash
-npm test                      # unit tests for the image operations (Node, no dependencies)
+npm test                      # unit tests: image operations, layers, text, history (Node, no dependencies)
 npm i && CHROME=/path/to/chrome npm run test:e2e   # browser end-to-end scenarios
 ```
 
@@ -154,6 +154,7 @@ npm i && CHROME=/path/to/chrome npm run test:e2e   # browser end-to-end scenario
 
 - `js/ops.js`: pure pixel operations (adjustments, filters, blur, sharpen, pixelate, mask handling). They don't touch the DOM, so they're unit-tested in Node.
 - `js/editor.js`: the document model (layers plus memory-capped undo history) and the zoomable viewport. Layers are immutable snapshots, so undo stores references instead of pixel copies.
+- `js/history.js`: the History panel and the resizable right sidebar. History labels come from `doc.label("…")` at the commit site, or else the active tool's name.
 - `js/tools.js`: the crop, resize, adjust, filters, text, layers and other panels. Each tool is a factory that builds its panel and handles pointer input in image coordinates.
 - `js/text.js`: text layers. A text layer keeps its text, font, size, colors and box in `layer.meta.text` and is re-rendered from them, so it stays editable (word wrapping is unit-tested in Node).
 - `js/paint.js`: the brush engine (stamped strokes with hardness and per-stroke opacity) and its variants (brush, pencil, pen, highlighter), eraser, shapes, paint bucket, gradient, eyedropper, selection, move and free transform. All pixel edits go through one function, which respects the selection and layer locks.

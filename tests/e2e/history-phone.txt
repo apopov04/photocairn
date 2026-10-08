@@ -1,0 +1,17 @@
+tool:paint
+path:0.3:0.3:0.5:0.4:0.6:0.3
+key:Control+Shift+N
+tool:fill
+tap:0.5:0.5
+click:.side-tabs [data-tab="history"]
+eval:[...document.querySelectorAll(".side-tabs button")].map(b=>b.textContent+":"+Math.round(b.getBoundingClientRect().width)).join(" ")
+eval:["#panel","#history-dock","#layers-dock"].map(s=>getComputedStyle(document.querySelector(s)).display).join(" ")
+eval:[...document.querySelectorAll("#history-dock .hlabel")].map(e=>e.textContent).join(" | ")
+shot:P1-history-tab
+click:#history-dock button[data-i="1"]
+eval:[__photocairn.doc.undoStack.length, __photocairn.doc.redoStack.length, __photocairn.doc.layers.length, document.querySelector("#side").dataset.tab].join(" ")
+shot:P2-back
+click:.side-tabs [data-tab="layers"]
+shot:P3-layers-tab
+click:.side-tabs [data-tab="props"]
+shot:P4-tool-tab

@@ -119,6 +119,13 @@ export class Doc {
     this.name = name;
     this.undoStack = [];
     this.redoStack = [];
+    // History labels: every state remembers the step that produced it ("Brush",
+    // "Merge down"...). label() names the next step; labeler() is the fallback.
+    this.stateLabel = "Open";
+    this.pendingLabel = null;
+    this.labeler = null;
+    this.trimmed = 0;      // oldest steps dropped by trim() to save memory
+    this.historySeq = 0;   // bumped whenever the list of steps changes
     this.listeners = new Set();
     this.version = 0;
     this._composite = null;
@@ -159,15 +166,28 @@ export class Doc {
 
   /* ---- history ---- */
   snapshot() {
-    return { layers: this.layers.slice(), active: this.active, width: this.width, height: this.height };
+    return { layers: this.layers.slice(), active: this.active, width: this.width, height: this.height, label: this.stateLabel };
   }
   restore(s) {
     if (s.width !== this.width || s.height !== this.height) this.selection = null;
     this.layers = s.layers; this.active = s.active; this.width = s.width; this.height = s.height;
+    if (s.label) this.stateLabel = s.label;
   }
-  record() {
+
+  /** Name the next undo step, e.g. doc.label("Merge down").change(...). Applies to the next record() in this task only. */
+  label(text) {
+    this.pendingLabel = text;
+    queueMicrotask(() => { if (this.pendingLabel === text) this.pendingLabel = null; });
+    return this;
+  }
+
+  /** Start a new undo step. `fallback` names it unless label() did; then the app's labeler, then "Edit". */
+  record(fallback) {
     this.undoStack.push(this.snapshot());
+    this.stateLabel = this.pendingLabel || fallback || this.labeler?.() || "Edit";
+    this.pendingLabel = null;
     this.redoStack = [];
+    this.historySeq++;
     this.trim();
   }
 
@@ -210,7 +230,7 @@ export class Doc {
   }
 
   setLayerProps(i, props, recordHistory = true) {
-    if (recordHistory) this.record();
+    if (recordHistory) this.record(propsLabel(props));
     this.layers[i] = { ...this.layers[i], ...props };
     this.emit();
   }
@@ -228,6 +248,8 @@ export class Doc {
       }
       if (bytes > HISTORY_BUDGET && i < this.undoStack.length - 2) {
         this.undoStack.splice(0, i + 1);
+        this.trimmed += i + 1;
+        this.historySeq++;
         break;
       }
     }
@@ -236,19 +258,49 @@ export class Doc {
   get canUndo() { return this.undoStack.length > 0; }
   get canRedo() { return this.redoStack.length > 0; }
 
-  undo() {
-    if (!this.canUndo) return;
-    this.redoStack.push(this.snapshot());
-    this.restore(this.undoStack.pop());
-    this.emit();
+  undo() { if (this.step(-1)) this.emit(); }
+  redo() { if (this.step(1)) this.emit(); }
+
+  /** Undo (dir < 0) or redo one step without notifying listeners. */
+  step(dir) {
+    const [from, to] = dir < 0 ? [this.undoStack, this.redoStack] : [this.redoStack, this.undoStack];
+    if (!from.length) return false;
+    to.push(this.snapshot());
+    this.restore(from.pop());
+    this.historySeq++;
+    return true;
   }
 
-  redo() {
-    if (!this.canRedo) return;
-    this.undoStack.push(this.snapshot());
-    this.restore(this.redoStack.pop());
+  /**
+   * The history list, oldest first: [{ label, state: "past"|"current"|"future" }].
+   * Index i is the state after i steps since the oldest one kept (see `trimmed`).
+   */
+  get history() {
+    const past = this.undoStack.map((s) => ({ label: s.label, state: "past" }));
+    const future = this.redoStack.map((s) => ({ label: s.label, state: "future" })).reverse();
+    return [...past, { label: this.stateLabel, state: "current" }, ...future];
+  }
+  get historyIndex() { return this.undoStack.length; }
+
+  /** Jump to history entry i by undoing or redoing as many steps as needed, with one change notification. */
+  goTo(i) {
+    i = Math.max(0, Math.min(this.undoStack.length + this.redoStack.length, i));
+    let n = i - this.undoStack.length;
+    if (!n) return;
+    const dir = Math.sign(n);
+    for (; n; n -= dir) this.step(dir);
     this.emit();
   }
+}
+
+/** A readable history label for a setLayerProps() change. */
+function propsLabel(p) {
+  if ("visible" in p) return p.visible ? "Show layer" : "Hide layer";
+  if ("name" in p) return "Rename layer";
+  if ("blend" in p) return "Blend mode";
+  if ("opacity" in p) return "Layer opacity";
+  if ("lock" in p) return "Layer lock";
+  return "Layer properties";
 }
 
 /** Screen viewport: draws a source canvas with zoom/pan and an overlay hook. */

@@ -9,6 +9,7 @@ import * as P from "./paint.js";
 import * as PSD from "./psd.js";
 import { buildMenus } from "./menus.js";
 import { metadataDialog, hasGps } from "./metadata-ui.js";
+import { historyPanel, resizableStack } from "./history.js";
 
 const $ = (s) => document.querySelector(s);
 const app = $("#app"), stageWrap = $("#stage-wrap"), panel = $("#panel");
@@ -148,7 +149,7 @@ async function addImageLayer(blob, name = "image") {
   x.imageSmoothingQuality = "high";
   x.drawImage(src, Math.round((doc.width - s.width) / 2), Math.round((doc.height - s.height) / 2), s.width, s.height);
   src.close?.();
-  doc.change((d) => {
+  doc.label(name === "Pasted" ? "Paste" : "Place image").change((d) => {
     d.layers.splice(d.active + 1, 0, makeLayer(c, baseName(name).slice(0, 30) || "Image"));
     d.active += 1;
   });
@@ -161,7 +162,9 @@ async function openPsd(blob, name) {
   try {
     const p = await PSD.readPsd(blob);
     if (p.width * p.height > MAX_PIXELS) return toast(`This PSD is ${p.width} × ${p.height}, too large to edit here.`, 4500);
-    setDoc(Doc.fromLayers(p.layers, p.width, p.height, baseName(name)));
+    const d = Doc.fromLayers(p.layers, p.width, p.height, baseName(name));
+    d.origin = name;
+    setDoc(d);
     toast(`Opened ${p.layers.length} layer${p.layers.length === 1 ? "" : "s"}.`);
   } catch (err) {
     console.error(err);
@@ -188,6 +191,7 @@ async function openBlob(blob, name = "image") {
   src.close?.();
   const d = new Doc(c, baseName(name));
   d.sourceFile = blob instanceof File ? blob : new File([blob], name, { type: blob.type });
+  d.origin = name;
   setDoc(d);
   if (await hasGps(blob)) toast("This photo contains its GPS location. See File › Metadata. Saved copies never include it.", 5500);
 }
@@ -195,10 +199,12 @@ async function openBlob(blob, name = "image") {
 function setDoc(d) {
   doc = d;
   doc.onChange(onDocChange);
+  doc.labeler = stepLabel;
   app.classList.remove("empty");
   toolName = null;
   selectTool(railTool);
   layersDock.render();
+  historyDock.render(true);
   preview = null;
   view.imgW = 0; display();
   requestAnimationFrame(() => { view.resize(); view.fit(); });
@@ -213,6 +219,7 @@ function onDocChange() {
   updateLayerNote();
   updateAnts();
   layersDock.render();
+  historyDock.render();
   tool?.onDocChange?.();
   scheduleExportEstimate();
 }
@@ -254,7 +261,9 @@ function newImageDialog() {
     localStorage.setItem("pc-new-w", w); localStorage.setItem("pc-new-h", hh); localStorage.setItem("pc-new-bg", bg);
     const c = makeCanvas(w, hh), x = c.getContext("2d");
     if (bg !== "transparent") { x.fillStyle = bg === "fg" ? A.colors.fg : "#ffffff"; x.fillRect(0, 0, w, hh); }
-    setDoc(new Doc(c, "untitled"));
+    const d = new Doc(c, "untitled");
+    d.stateLabel = "New image"; d.origin = `${w} × ${hh}`;
+    setDoc(d);
   });
   document.body.append(dlg);
   dlg.showModal();
@@ -463,9 +472,24 @@ const selGroup = toolGroup({
 
 /* ------------------------------- right sidebar ------------------------------- */
 
+// Desktop: tool options, History and Layers stacked with drag handles between
+// them. Phones: tabs switch between them.
 const side = $("#side");
 const layersDock = T.layersPanel(A);
 $("#layers-dock").append(layersDock.el);
+const historyDock = historyPanel(() => doc);
+$("#history-dock").append(historyDock.el);
+resizableStack([panel, $("#history-dock"), $("#layers-dock")]);
+
+// History labels: commits name themselves with doc.label() where it matters;
+// everything else is named after the tool that made it.
+const TOOL_LABELS = { "Paint bucket": "Fill", "Crop & rotate": "Crop", "Rotate & flip": "Rotate" };
+let lastInput = null; // where the user last clicked or typed
+for (const t of ["pointerdown", "keydown"]) addEventListener(t, (e) => { lastInput = e.target; }, true);
+function stepLabel() {
+  if (lastInput?.closest?.("#layers-dock")) return lastInput.matches("input") ? "Layer opacity" : "Layers";
+  return TOOL_LABELS[tool?.title] || tool?.title || "Edit";
+}
 function showTab(tab) {
   side.dataset.tab = tab;
   for (const b of side.querySelectorAll(".side-tabs button")) b.classList.toggle("on", b.dataset.tab === tab);
@@ -761,7 +785,7 @@ if ("launchQueue" in window) {
 const has = () => !!doc;
 const hasSel = () => !!doc?.selection;
 const L = () => T.layerOps(A);
-const wholeImage = (fn) => { if (!doc) return; doc.commitAll(fn); view.fit(); };
+const wholeImage = (fn, label) => { if (!doc) return; doc.label(label).commitAll(fn); view.fit(); };
 
 /** Copy the selection (or the whole layer) to the system clipboard as PNG. */
 async function copyToClipboard(cut = false) {
@@ -808,6 +832,7 @@ function shortcutsDialog() {
   const dlg = h("dialog", { "aria-label": "Keyboard shortcuts" },
     h("h2", {}, "Keyboard shortcuts"),
     h("table", { class: "keys" }, rows.map(([a, b]) => h("tr", {}, h("td", {}, a), h("td", {}, h("kbd", {}, b))))),
+    h("p", { class: "note" }, "Click a step in History to go back to it (or forward again). Drag the lines between Tool, History and Layers to resize them; double-click a line to reset it."),
     h("div", { style: "display:flex;justify-content:flex-end;margin-top:12px" }, h("button", { class: "primary", onclick: () => dlg.close() }, "Close")));
   dlg.addEventListener("close", () => dlg.remove());
   document.body.append(dlg); dlg.showModal();
@@ -853,12 +878,12 @@ buildMenus($("#menus"), $("#btn-menu"), [
     { label: "Crop", shortcut: "C", action: () => selectTool("crop"), enabled: has },
     { label: "Crop to selection", action: () => P.cropToSelection(A), enabled: hasSel },
     "-",
-    { label: "Rotate 90° clockwise", action: () => wholeImage((c) => T.rotateCanvas90(c, 1)), enabled: has },
-    { label: "Rotate 90° counter-clockwise", action: () => wholeImage((c) => T.rotateCanvas90(c, -1)), enabled: has },
-    { label: "Rotate 180°", action: () => wholeImage((c) => T.rotateCanvas90(T.rotateCanvas90(c, 1), 1)), enabled: has },
+    { label: "Rotate 90° clockwise", action: () => wholeImage((c) => T.rotateCanvas90(c, 1), "Rotate 90° CW"), enabled: has },
+    { label: "Rotate 90° counter-clockwise", action: () => wholeImage((c) => T.rotateCanvas90(c, -1), "Rotate 90° CCW"), enabled: has },
+    { label: "Rotate 180°", action: () => wholeImage((c) => T.rotateCanvas90(T.rotateCanvas90(c, 1), 1), "Rotate 180°"), enabled: has },
     { label: "Rotate by angle…", action: () => selectTool("rotate"), enabled: has },
-    { label: "Flip horizontal", action: () => doc && doc.commitAll((c) => T.flipCanvas(c, true)), enabled: has },
-    { label: "Flip vertical", action: () => doc && doc.commitAll((c) => T.flipCanvas(c, false)), enabled: has },
+    { label: "Flip horizontal", action: () => doc && doc.label("Flip horizontal").commitAll((c) => T.flipCanvas(c, true)), enabled: has },
+    { label: "Flip vertical", action: () => doc && doc.label("Flip vertical").commitAll((c) => T.flipCanvas(c, false)), enabled: has },
     "-",
     { label: "Corners & border…", action: () => selectTool("frame"), enabled: has },
   ] },
@@ -895,6 +920,7 @@ buildMenus($("#menus"), $("#btn-menu"), [
     { label: "Actual size (100%)", shortcut: "1", action: () => view.actualSize(), enabled: has },
     "-",
     { label: "Layers panel", shortcut: "L", action: () => showTab("layers"), enabled: has },
+    { label: "History panel", action: () => showTab("history"), enabled: has },
   ] },
   { label: "Help", items: [
     { label: "Keyboard shortcuts", action: shortcutsDialog },
