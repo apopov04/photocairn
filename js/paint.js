@@ -628,15 +628,17 @@ export function drawSelectionOutline(ctx, view, doc, phase) {
   ctx.restore();
 }
 
-const SEL_KINDS = [
-  { value: "rect", label: "Rectangle", title: "Drag a rectangle" },
+/** Selection kinds, which share the Select rail button (M cycles them, W jumps to the wand). */
+export const SEL_KINDS = [
+  { value: "rect", label: "Rectangle", title: "Drag a rectangle", key: "M" },
   { value: "ellipse", label: "Ellipse", title: "Drag an ellipse" },
   { value: "lasso", label: "Lasso", title: "Draw around an area freehand" },
   { value: "polygon", label: "Polygon", title: "Click corner points, click the first point or double-click to finish" },
-  { value: "wand", label: "Magic wand", title: "Click a color to select similar pixels (W)" },
+  { value: "wand", label: "Magic wand", title: "Click a color to select similar pixels (W)", key: "W" },
 ];
 
-export function selectTool(A, makeLayer) {
+/** onKind(kind) is called when the kind changes, so the rail button can follow. */
+export function selectTool(A, makeLayer, onKind) {
   let kind = localStorage.getItem("pc-sel") || "rect", mode = "new", drag = null, poly = null, hover = null;
   if (!SEL_KINDS.some((k) => k.value === kind)) kind = "rect";
   const savedWand = JSON.parse(localStorage.getItem("pc-wand") || "null") || {};
@@ -676,7 +678,7 @@ export function selectTool(A, makeLayer) {
     wandOpts.hidden = kind !== "wand";
   };
   showKind();
-  const setKind = (v) => { kind = v; poly = null; drag = null; localStorage.setItem("pc-sel", v); kindSeg.set(v); showKind(); A.redraw(); };
+  const setKind = (v) => { kind = v; poly = null; drag = null; localStorage.setItem("pc-sel", v); kindSeg.set(v); showKind(); onKind?.(v); A.redraw(); };
   const kindSeg = seg(SEL_KINDS, kind, setKind);
   let lastClick = { t: 0, p: null };
   const opFor = (e) => (e?.shiftKey && e?.altKey ? "intersect" : e?.shiftKey ? "add" : e?.altKey ? "subtract" : mode);

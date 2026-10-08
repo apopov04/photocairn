@@ -1,0 +1,56 @@
+eval:localStorage.setItem("pc-sel", "rect")
+tool:select
+eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=select]').title + " | " + document.querySelector("#panel .seg .on")?.textContent
+shot:S0-rail
+eval:document.querySelector('#tools [data-tool=select]').dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 }))
+shot:S1-flyout
+eval:[...document.querySelectorAll(".tool-flyout button")].map((b) => b.textContent + (b.classList.contains("on") ? "*" : "")).join(", ")
+key:ArrowDown
+key:ArrowDown
+eval:document.activeElement.textContent
+eval:[...document.querySelectorAll(".tool-flyout button")].find((b) => b.textContent.startsWith("Lasso")).click()
+eval:!!document.querySelector(".tool-flyout") + " | " + document.querySelector('#tools [data-tool=select] span').textContent + " | " + document.querySelector("#panel .seg .on")?.textContent + " | " + localStorage.getItem("pc-sel")
+path:0.3:0.3:0.6:0.25:0.65:0.6:0.35:0.65:0.3:0.3
+eval:__photocairn.doc.selection ? "selected" : "none"
+clicktext:Polygon
+eval:document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + localStorage.getItem("pc-sel")
+key:m
+eval:document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector("#panel .seg .on")?.textContent
+key:Shift+M
+eval:document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector("#panel .seg .on")?.textContent
+key:m
+eval:document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector("#panel .seg .on")?.textContent
+tool:move
+key:m
+eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector('#tools [data-tool=select]').classList.contains("active")
+key:Escape
+tool:move
+key:w
+eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector("#panel .seg .on")?.textContent
+tap:0.5:0.5
+eval:__photocairn.doc.selection ? "selected" : "none"
+key:Escape
+clicktext:Ellipse
+key:w
+eval:document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector("#panel .seg .on")?.textContent
+key:l
+eval:document.querySelector("#side").dataset.tab
+tool:select
+eval:document.querySelector("#side").dataset.tab + " | " + document.querySelector("#side h2").textContent
+eval:document.querySelector('#tools [data-tool=select]').dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch", button: 0, clientX: 20, clientY: 200 }))
+wait:600
+eval:!!document.querySelector(".tool-flyout") + " | " + document.querySelector(".tool-flyout")?.getAttribute("aria-label")
+shot:S2-longpress
+eval:document.querySelector('#tools [data-tool=paint]').dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 }))
+eval:document.querySelector(".tool-flyout")?.getAttribute("aria-label") + " | " + document.querySelectorAll(".tool-flyout").length
+key:Escape
+eval:!!document.querySelector(".tool-flyout")
+tool:rect
+eval:document.querySelector('#tools [data-tool=select]').getAttribute("aria-label") + " | " + document.querySelector("#panel .seg .on")?.textContent
+drag:0.2:0.2:0.6:0.6
+eval:__photocairn.doc.selection ? "selected" : "none"
+key:b
+eval:document.querySelector("#side h2").textContent
+key:m
+eval:document.querySelector("#side h2").textContent + " | " + document.querySelector("#panel .seg .on")?.textContent
+shot:S3-done
