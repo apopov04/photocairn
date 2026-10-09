@@ -106,7 +106,7 @@ function frameThrottle(fn) {
 
 /* ------------------------------ brush engine ------------------------------ */
 
-const CHISEL = 0.35; // highlighter tip: width as a fraction of its height
+export const CHISEL = 0.35; // highlighter tip: width as a fraction of its height
 
 function makeStamp(size, hardness, color, chisel = false) {
   const r = size / 2, dim = Math.ceil(size) + 2;
@@ -138,7 +138,7 @@ function makePixelStamp(size, color, square) {
 }
 
 /** Accumulates one stroke into its own canvas (so opacity applies once per stroke). */
-class Stroke {
+export class Stroke {
   // pixel: false, "round" (pencil) or "square" (Block eraser).
   constructor(w, hgt, { size, hardness = 1, color = "#000", pixel = false, chisel = false }) {
     this.canvas = makeCanvas(w, hgt);
@@ -281,7 +281,7 @@ export function paintTool(A, kind = "brush") {
 
 /* ---------------------------------- shapes ---------------------------------- */
 
-function shapePath(x, kind, a, b, width) {
+export function shapePath(x, kind, a, b, width) {
   x.beginPath();
   if (kind === "rect") x.rect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
   else if (kind === "ellipse") x.ellipse((a.x + b.x) / 2, (a.y + b.y) / 2, Math.abs(b.x - a.x) / 2 || 0.5, Math.abs(b.y - a.y) / 2 || 0.5, 0, 0, Math.PI * 2);
@@ -394,7 +394,7 @@ export function eyedropperTool(A) {
 
 /* ------------------------------- paint bucket ------------------------------- */
 
-function maskCanvas(mask, w, hgt) {
+export function maskCanvas(mask, w, hgt) {
   const img = new ImageData(w, hgt);
   for (let i = 0; i < mask.length; i++) img.data[i * 4 + 3] = mask[i];
   const c = makeCanvas(w, hgt);

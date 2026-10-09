@@ -10,6 +10,7 @@ import * as PSD from "./psd.js";
 import { buildMenus } from "./menus.js";
 import { metadataDialog, hasGps } from "./metadata-ui.js";
 import { historyPanel, resizableStack } from "./history.js";
+import { installApi } from "./api.js";
 
 const $ = (s) => document.querySelector(s);
 const app = $("#app"), stageWrap = $("#stage-wrap"), panel = $("#panel");
@@ -172,9 +173,9 @@ async function openPsd(blob, name) {
   }
 }
 
-async function openBlob(blob, name = "image") {
+async function openBlob(blob, name = "image", ask = true) {
   if (!blob) return;
-  if (doc?.canUndo && !confirm("Open a new image? Your current edits will be lost.")) return;
+  if (ask && doc?.canUndo && !confirm("Open a new image? Your current edits will be lost.")) return;
   if (PSD.isPsd(blob, name)) return openPsd(blob, name);
   const src = await decode(blob, name);
   if (!src) return;
@@ -958,9 +959,13 @@ buildMenus($("#menus"), $("#btn-menu"), [
   { label: "Help", items: [
     { label: "Keyboard shortcuts", action: shortcutsDialog },
     { label: "About Photocairn", action: aboutDialog },
+    { label: "For developers & AI agents", action: () => window.open("developers/", "_blank", "noopener") },
     { label: "Source code on GitHub", action: () => window.open("https://github.com/apopov04/photocairn", "_blank", "noopener") },
   ] },
 ]);
 
 // Debug/test hook (used by the automated browser tests).
 window.__photocairn = { open: openBlob, addLayer: addImageLayer, get doc() { return doc; }, view, selectTool };
+
+// Public scripting API for AI agents and automation: window.photocairn (see js/api.js).
+installApi({ A, setDoc, open: (blob, name) => openBlob(blob, name, false), addImageLayer, renderExport, layerOps: L, baseName, maxPixels: MAX_PIXELS });

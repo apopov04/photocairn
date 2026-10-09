@@ -8,6 +8,7 @@
   "scripts": {
     "start": "node tests/serve.mjs",
     "test": "node --test tests/*.test.mjs",
+    "docs": "node scripts/api-docs.mjs",
     "test:e2e": "node tests/e2e/run.mjs tests/e2e/tools.txt"
   },
   "devDependencies": {

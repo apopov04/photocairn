@@ -136,6 +136,25 @@ Related tools (brushes, selections, fills, shapes, blur out) share one toolbar b
 - `Enter`: apply
 - `Esc`: cancel, or deselect
 
+## For AI agents
+
+AI agents that drive a browser (ChatGPT agent, Claude in Chrome, Playwright scripts) can edit images through `window.photocairn`, a small scripting API. Every method is async, takes JSON-friendly options in image pixels, and goes through the same code as the UI, so edits respect layers, the selection and locks, show up in History and can be undone.
+
+```js
+await photocairn.help();                              // every method, its parameters, ranges and defaults
+await photocairn.open(dataUrl);
+await photocairn.removeBackground({ model: "fast" });
+await photocairn.redact({ x: 40, y: 300, width: 420, height: 60, mode: "box" });
+const png = await photocairn.export({ format: "png" });
+```
+
+- [Developer & agent guide](https://photocairn.silicairn.com/developers/): every tool, shortcut and API method, with worked examples
+- [llms.txt](https://photocairn.silicairn.com/llms.txt) and [llms-full.txt](https://photocairn.silicairn.com/llms-full.txt) for LLMs
+
+The editing still runs on your device, but whatever AI is driving the browser can see the image.
+
+The API is described in [`js/api-spec.js`](js/api-spec.js), which also generates `llms-full.txt` and `developers/index.html` (from [`scripts/docs-guide.md`](scripts/docs-guide.md)): run `npm run docs` after changing either.
+
 ## Run it yourself
 
 There's no build step. It's plain HTML, CSS and JavaScript modules.
@@ -158,6 +177,7 @@ npm i && CHROME=/path/to/chrome npm run test:e2e   # browser end-to-end scenario
 
 - `js/ops.js`: pure pixel operations (adjustments, filters, blur, sharpen, pixelate, mask handling). They don't touch the DOM, so they're unit-tested in Node.
 - `js/editor.js`: the document model (layers plus memory-capped undo history) and the zoomable viewport. Layers are immutable snapshots, so undo stores references instead of pixel copies.
+- `js/api.js`: `window.photocairn`, the scripting API for AI agents and automation. `js/api-spec.js` describes its methods and checks arguments; `scripts/api-docs.mjs` turns it into the docs.
 - `js/history.js`: the History panel and the resizable right sidebar. History labels come from `doc.label("…")` at the commit site, or else the active tool's name.
 - `js/tools.js`: the crop, resize, adjust, filters, text, layers and other panels. Each tool is a factory that builds its panel and handles pointer input in image coordinates.
 - `js/text.js`: text layers. A text layer keeps its text, font, size, colors and box in `layer.meta.text` and is re-rendered from them, so it stays editable (word wrapping is unit-tested in Node).

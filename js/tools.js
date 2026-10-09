@@ -87,7 +87,7 @@ function getWorker() {
   return worker;
 }
 
-async function predictMask(canvas, model, onProgress) {
+export async function predictMask(canvas, model, onProgress) {
   const bitmap = await createImageBitmap(canvas);
   const id = ++jobId;
   return new Promise((resolve, reject) => {
@@ -100,7 +100,7 @@ async function predictMask(canvas, model, onProgress) {
 }
 
 /** Composite the cutout subject over the chosen background. */
-function composeCutout(meta) {
+export function composeCutout(meta) {
   const { subject, bg } = meta;
   const out = makeCanvas(subject.width, subject.height);
   const x = out.getContext("2d");
@@ -544,7 +544,7 @@ const ADJ = [
   ["warmth", "Warmth"], ["tint", "Tint"],
 ];
 
-function runAdjust(img, v, scale = 1) {
+export function runAdjust(img, v, scale = 1) {
   let out = ops.adjust(img, v);
   if (v.blur) out = ops.blur(out, (v.blur / 4) * scale);
   if (v.sharpen) out = ops.sharpen(out, v.sharpen, 1.2 * Math.max(0.5, scale));
@@ -652,6 +652,22 @@ export const REDACT_MODES = [
 // Strength and box color carry over when switching between the variants (this session only).
 let redactStrength = 60, redactColor = "#000000";
 
+/** Blur, pixelate or cover rectangle r ({ x, y, w, h }, whole pixels inside the image) on the active layer. */
+export function redactRect(doc, r, mode, strength, color) {
+  doc.commit((c) => {
+    const x = ctx2d(c);
+    if (mode === "box") { x.fillStyle = color; x.fillRect(r.x, r.y, r.w, r.h); return; }
+    const pad = mode === "blur" ? Math.ceil(Math.min(r.w, r.h) * 0.6) : 0;
+    const sx = Math.max(0, r.x - pad), sy = Math.max(0, r.y - pad);
+    const sw = Math.min(c.width, r.x + r.w + pad) - sx, sh = Math.min(c.height, r.y + r.h + pad) - sy;
+    const img = x.getImageData(sx, sy, sw, sh);
+    const k = strength / 100;
+    if (mode === "pixelate") ops.pixelateRect(img, r.x - sx, r.y - sy, r.w, r.h, Math.max(4, Math.min(r.w, r.h) * (0.05 + 0.3 * k)));
+    else ops.blurRect(img, r.x - sx, r.y - sy, r.w, r.h, Math.max(3, Math.min(r.w, r.h) * (0.05 + 0.25 * k)));
+    x.putImageData(img, sx, sy);
+  });
+}
+
 export function redactTool(A, mode = "blur") {
   if (!REDACT_MODES.some((m) => m.value === mode)) mode = "blur";
   let drag = null;
@@ -661,18 +677,7 @@ export function redactTool(A, mode = "blur") {
     r.w = Math.min(r.w, A.doc.width - r.x); r.h = Math.min(r.h, A.doc.height - r.y);
     if (r.w < 3 || r.h < 3) return;
     if (!guard(A)) return;
-    A.doc.commit((c) => {
-      const x = ctx2d(c);
-      if (mode === "box") { x.fillStyle = redactColor; x.fillRect(r.x, r.y, r.w, r.h); return; }
-      const pad = mode === "blur" ? Math.ceil(Math.min(r.w, r.h) * 0.6) : 0;
-      const sx = Math.max(0, r.x - pad), sy = Math.max(0, r.y - pad);
-      const sw = Math.min(c.width, r.x + r.w + pad) - sx, sh = Math.min(c.height, r.y + r.h + pad) - sy;
-      const img = x.getImageData(sx, sy, sw, sh);
-      const k = redactStrength / 100;
-      if (mode === "pixelate") ops.pixelateRect(img, r.x - sx, r.y - sy, r.w, r.h, Math.max(4, Math.min(r.w, r.h) * (0.05 + 0.3 * k)));
-      else ops.blurRect(img, r.x - sx, r.y - sy, r.w, r.h, Math.max(3, Math.min(r.w, r.h) * (0.05 + 0.25 * k)));
-      x.putImageData(img, sx, sy);
-    });
+    redactRect(A.doc, r, mode, redactStrength, redactColor);
   }
   return {
     title: REDACT_MODES.find((m) => m.value === mode).label,

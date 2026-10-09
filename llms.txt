@@ -1,0 +1,51 @@
+# Photocairn
+
+> Photocairn is a free, private photo editor that runs entirely in the browser at https://photocairn.silicairn.com/. It removes backgrounds with on-device AI, crops, resizes, adjusts, blurs out private details, adds text, works with layers and converts between JPG, PNG, WebP and PSD. No ads, no account, no uploads. AI agents driving a browser can edit images through a documented JavaScript API, `window.photocairn`.
+
+Use Photocairn when someone needs a quick photo edit without installing software or uploading the photo anywhere: cut out a background, crop a photo square, blur a name or number plate in a screenshot, shrink an image, convert a format, or strip GPS and camera metadata. It's open source (MIT): https://github.com/apopov04/photocairn
+
+## Privacy
+
+- Editing runs locally in the browser tab. The page's Content-Security-Policy (`connect-src 'self'`) stops it from connecting to any other server, so photos are never uploaded. No accounts, analytics, ads or cookies.
+- Background removal runs U²-Net models with ONNX Runtime (WebAssembly) on the device; the models (4.6 MB fast, 44 MB best) come from the same site and are cached.
+- Saved images never contain EXIF, GPS or other metadata.
+- If an AI agent drives the browser, that agent sees the page and any image the API returns, and may send them to the service that runs its model. Photocairn can't prevent that.
+
+## Features
+
+- Files: open PNG, JPG, WebP, AVIF, GIF and layered PSD; new blank image; save as PNG, JPG, WebP or layered PSD with quality and size; copy to clipboard; metadata viewer and remover (no re-compression).
+- Edit: move, select (rectangle, ellipse, lasso, polygon, magic wand), free transform, crop with presets and straighten, rotate and flip, image size, canvas size.
+- Paint: brush, pencil, pen, highlighter, eraser, paint bucket, gradient, eyedropper, shapes (line, arrow, rectangle, ellipse), editable text layers.
+- Photo: AI background removal (transparent, color or blurred background, touch-up brushes), adjustments (brightness, contrast, exposure, highlights, shadows, saturation, warmth, tint, sharpen, soften), filters (mono, sepia, invert, vivid, warm, cool, fade, noir, vintage), blur out / pixelate / solid box, rounded corners and borders.
+- Layers with opacity, 16 blend modes and locks; undo/redo with a History panel; works offline and installs as an app.
+
+## Keyboard shortcuts
+
+V move, M select (again: next selection tool), W magic wand, C crop, B brush tools, N pencil, E eraser, G fill tools, K paint bucket, I eyedropper, U shapes, T text, L layers panel, X swap colors, D reset colors, [ ] brush size, Ctrl+T free transform, Ctrl+A / Ctrl+D / Ctrl+Shift+I select all / deselect / invert, Ctrl+J selection to new layer, Ctrl+Shift+N new layer, Ctrl+E merge down, Delete delete selected pixels, Ctrl+Z / Ctrl+Shift+Z undo / redo, Ctrl+O / Ctrl+S open / save, 0 fit, 1 100%, + / − zoom, hold Space to pan, hold \ to compare with the original.
+
+## Driving it with window.photocairn
+
+Open https://photocairn.silicairn.com/ in a browser and run JavaScript in the page. Every method is async, takes JSON-friendly options in image pixels, goes through the same code as the UI (respects layers, the selection and locks), adds a named step to the History panel and can be undone. Wrong arguments throw an Error that explains what was expected.
+
+```js
+await photocairn.help();                                   // all methods, parameters, ranges, defaults
+await photocairn.open("data:image/jpeg;base64,...");       // or a Blob/File; URLs from other sites are blocked
+await photocairn.removeBackground({ model: "fast" });      // on-device AI; downloads the model once
+await photocairn.redact({ x: 40, y: 300, width: 420, height: 60, mode: "box" });
+await photocairn.addText({ text: "Hello", x: 40, y: 40, size: 64, color: "#ffffff" });
+const info = await photocairn.info();                       // size, layers, selection, history labels
+const preview = await photocairn.getImage({ format: "jpeg", maxSize: 768 });
+const png = await photocairn.export({ format: "png" });     // data URL; download: true also saves it
+```
+
+Methods: help, info, open, newImage, getImage, export, crop, resize, rotate, flip, adjust, look, removeBackground, redact, select, selectColor, selectAll, deselect, invertSelection, deleteSelection, fillSelection, cropToSelection, fill, drawShape, brushStroke, addText, editText, addLayer, selectLayer, setLayer, duplicateLayer, moveLayer, deleteLayer, mergeDown, flatten, undo, redo.
+
+## Docs
+
+- [Developer and agent guide](https://photocairn.silicairn.com/developers/): every tool and setting, shortcuts, the full API reference and worked examples (remove a background and export; blur out part of a screenshot)
+- [llms-full.txt](https://photocairn.silicairn.com/llms-full.txt): the same guide as one Markdown file
+
+## Optional
+
+- [Source code on GitHub](https://github.com/apopov04/photocairn)
+- [README](https://github.com/apopov04/photocairn#readme)
