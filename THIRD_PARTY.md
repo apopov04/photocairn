@@ -16,3 +16,7 @@ Photocairn bundles the following so it can run fully offline, with no requests t
 - The ONNX exports come from the rembg project's releases.
 
 > Qin, X., Zhang, Z., Huang, C., Dehghan, M., Zaiane, O. R., & Jagersand, M. (2020). *U²-Net: Going deeper with nested U-structure for salient object detection.* Pattern Recognition, 106, 107404.
+
+## Phosphor Icons (`js/icons.js`)
+- Regular weight, from https://phosphoricons.com (`@phosphor-icons/core` 2.1.1)
+- MIT License, © Phosphor Icons. Only the icons Photocairn uses are inlined, so nothing is loaded from other servers.

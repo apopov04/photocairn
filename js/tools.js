@@ -2,6 +2,7 @@
 // and returns { title, body, cursor?, down?, move?, up?, overlay?, cleanup?,
 // onDocChange? }. Pointer callbacks receive points in image coordinates.
 
+import { ph } from "./icons.js";
 import * as ops from "./ops.js";
 import { makeCanvas, ctx2d, copyCanvas, getImageData, canvasFromImageData, resizeCanvas, makeLayer, BLEND_MODES } from "./editor.js";
 import { h, slider, numField, seg, swatches, progress, nextFrame, markRadio } from "./ui.js";
@@ -1119,14 +1120,14 @@ function thumb(layer, w, hgt) {
   return c;
 }
 
-const EYE = '<svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
-const EYE_OFF = '<svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 5.1A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+const EYE = ph("eye");
+const EYE_OFF = ph("eye-slash");
 
 const LOCK_ICONS = {
-  alpha: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 2"/><rect x="7" y="7" width="5" height="5" fill="currentColor"/><rect x="12" y="12" width="5" height="5" fill="currentColor"/></svg>',
-  pixels: '<svg viewBox="0 0 24 24"><path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L11 15.8 8.2 13z"/><path d="M7 14c-2 0-3 1.5-3 3 0 1.2-.8 2.2-2 3 3 1 7 .5 8-3z"/></svg>',
-  position: '<svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M12 2l-3 3M12 2l3 3M12 22l-3-3M12 22l3-3M2 12l3-3M2 12l3 3M22 12l-3-3M22 12l-3 3"/></svg>',
-  all: '<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+  alpha: ph("checkerboard"),
+  pixels: ph("paint-brush"),
+  position: ph("arrows-out-cardinal"),
+  all: ph("lock-simple"),
 };
 const LOCKS = [
   ["alpha", "Transparency", "Lock transparent pixels: paint only where the layer already has pixels"],
@@ -1136,14 +1137,14 @@ const LOCKS = [
 ];
 
 const ICON = {
-  add: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M12 8v8M8 12h8"/></svg>',
-  image: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 8"/></svg>',
-  dup: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>',
-  up: '<svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
-  down: '<svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg>',
-  merge: '<svg viewBox="0 0 24 24"><path d="M8 4v6l4 4 4-4V4M12 14v6"/></svg>',
-  clear: '<svg viewBox="0 0 24 24"><path d="M4 20h16M7 16 17 6M7 6l10 10" opacity=".9"/></svg>',
-  trash: '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
+  add: ph("plus-square"),
+  image: ph("image"),
+  dup: ph("copy"),
+  up: ph("arrow-up"),
+  down: ph("arrow-down"),
+  merge: ph("arrows-merge"),
+  clear: ph("broom"),
+  trash: ph("trash"),
 };
 
 /** The always-visible Layers dock (bottom of the right sidebar). */

@@ -1,6 +1,7 @@
 // Photocairn: app shell. Opening/saving files, the viewport's pointer and
 // keyboard handling, and switching between tools.
 
+import { ph } from "./icons.js";
 import { Doc, View, makeCanvas, resizeCanvas, makeLayer } from "./editor.js";
 import { formatBytes, fitSize } from "./ops.js";
 import { h, numField, markRadio } from "./ui.js";
@@ -414,7 +415,7 @@ function toolGroup({ tool, name, group, variants, icons, storage, key = "", tip 
       g.value = v;
       localStorage.setItem(storage, v);
       const it = variants.find((x) => x.value === v), k = it.key || key;
-      btn.innerHTML = `<svg viewBox="0 0 24 24">${icons[v]}</svg><span>${it.short || it.label}</span>`;
+      btn.innerHTML = `${icons[v]}<span>${it.short || it.label}</span>`;
       btn.title = `${tip}${it.label}${k ? ` (${k})` : ""}. ${key ? `${key} cycles through ${name.toLowerCase()}. ` : ""}Right-click or long-press to choose.`;
       btn.setAttribute("aria-label", `${group} tool group: ${it.label}`);
       if (k) btn.setAttribute("aria-keyshortcuts", k);
@@ -463,7 +464,7 @@ function openFlyout(g, focus = false) {
       role: "menuitemradio", "aria-checked": String(v.value === g.value), class: v.value === g.value ? "on" : null,
       "aria-label": v.label, "aria-keyshortcuts": v.key || null,
       onclick: () => { closeFlyout(); selectTool(v.value); },
-    }, h("span", { html: `<svg viewBox="0 0 24 24">${g.icons[v.value]}</svg>` }, v.label), v.key ? h("kbd", {}, v.key) : null))));
+    }, h("span", { html: g.icons[v.value] }, v.label), v.key ? h("kbd", {}, v.key) : null))));
   flyout.group = g;
   g.btn.setAttribute("aria-expanded", "true");
   g.btn.setAttribute("aria-controls", "tool-flyout");
@@ -492,10 +493,10 @@ $("#tools").addEventListener("scroll", closeFlyout);
 toolGroup({
   tool: "paint", name: "Brush tools", group: "Brush", variants: P.BRUSHES, storage: "pc-brush-tool", key: "B",
   icons: {
-    brush: '<path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L11 15.8 8.2 13z"/><path d="M7 14c-2 0-3 1.5-3 3 0 1.2-.8 2.2-2 3 3 1 7 .5 8-3z"/>',
-    pencil: '<path d="M15 4l5 5L9 20H4v-5z"/><path d="M13 6l5 5"/>',
-    pen: '<path d="M20 4c-5 0-9 2-11 6l-5 10 10-5c4-2 6-6 6-11z"/><path d="M4 20l6.5-6.5"/><circle cx="12" cy="12" r="1.5"/>',
-    highlighter: '<path d="M15 3l6 6-8 8-6-6z"/><path d="M7 11l-2 5 3 3 5-2"/><path d="M5 16l-2.5 2.5L4 20h4"/><path d="M14 21h7" opacity=".5"/>',
+    brush: ph("paint-brush"),
+    pencil: ph("pencil-simple"),
+    pen: ph("pen-nib"),
+    highlighter: ph("highlighter"),
   },
 });
 
@@ -503,11 +504,11 @@ toolGroup({
 toolGroup({
   tool: "select", name: "Selection tools", group: "Select", variants: P.SEL_KINDS, storage: "pc-sel", key: "M", tip: "Select: ",
   icons: {
-    rect: '<rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="3 3"/>',
-    ellipse: '<ellipse cx="12" cy="12" rx="9" ry="7" stroke-dasharray="3 3"/>',
-    lasso: '<path d="M8.5 13.8C6.4 12.9 5 11.1 5 9c0-3 3.6-5.5 8-5.5S21 6 21 9s-3.6 5.5-8 5.5c-1 0-2-.1-2.9-.4" stroke-dasharray="3 2.6"/><circle cx="9.2" cy="14.3" r="1.3"/><path d="M8.4 15.5c-1.2 1.4-2.9 2.2-2.9 3.8 0 1.3 1.2 2 2.5 1.5"/>',
-    polygon: '<path d="M5 6l11-2 4 9-7 7-9-4z" stroke-dasharray="3 2.6"/><circle cx="5" cy="6" r=".9"/><circle cx="16" cy="4" r=".9"/><circle cx="20" cy="13" r=".9"/><circle cx="13" cy="20" r=".9"/><circle cx="4" cy="16" r=".9"/>',
-    wand: '<path d="M3 21l11-11"/><path d="M12.5 8.5l3 3"/><path d="M17 3v3M17 12v3M11 9h0M20 9h3M13.5 5.5l-1-1M20.5 5.5l1-1M20.5 12.5l1 1"/>',
+    rect: ph("selection"),
+    ellipse: ph("circle-dashed"),
+    lasso: ph("lasso"),
+    polygon: ph("polygon"),
+    wand: ph("magic-wand"),
   },
 });
 
@@ -515,8 +516,8 @@ toolGroup({
 toolGroup({
   tool: "fills", name: "Fill tools", group: "Fill", variants: P.FILLS, storage: "pc-fill-tool", key: "G",
   icons: {
-    fill: '<path d="M5 11l7-7 7 7-7 7z"/><path d="M5 11h14"/><path d="M20 15s2 2.5 2 3.5a2 2 0 0 1-4 0c0-1 2-3.5 2-3.5z"/>',
-    gradient: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18" opacity=".5"/><path d="M9 3v18" opacity=".3"/>',
+    fill: ph("paint-bucket"),
+    gradient: ph("gradient"),
   },
 });
 
@@ -525,10 +526,10 @@ toolGroup({
   tool: "shapes", name: "Shapes", group: "Shapes", variants: P.SHAPES, storage: "pc-shape-tool", key: "U",
   initial: ((k) => (k === "line" || k === "arrow" ? k : `shape-${k || "rect"}`))(JSON.parse(localStorage.getItem("pc-shapes") || "null")?.kind),
   icons: {
-    line: '<path d="M4 20L20 4"/>',
-    arrow: '<path d="M4 20L20 4"/><path d="M11 4h9v9"/>',
-    "shape-rect": '<rect x="3.5" y="5.5" width="17" height="13" rx="1"/>',
-    "shape-ellipse": '<ellipse cx="12" cy="12" rx="9" ry="6.5"/>',
+    line: ph("line-segment"),
+    arrow: ph("arrow-up-right"),
+    "shape-rect": ph("rectangle"),
+    "shape-ellipse": ph("circle"),
   },
 });
 
@@ -536,9 +537,9 @@ toolGroup({
 toolGroup({
   tool: "redact", name: "Blur out tools", group: "Blur out", variants: T.REDACT_MODES, storage: "pc-redact", tip: "Blur out: ",
   icons: {
-    blur: '<circle cx="12" cy="12" r="8" opacity=".35"/><circle cx="12" cy="12" r="5" opacity=".65"/><circle cx="12" cy="12" r="2"/>',
-    pixelate: '<rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 9h6V3M9 9v6h6V9h6M3 15h6v6M15 15v6M15 15h6"/><rect x="9" y="3" width="6" height="6" fill="currentColor" opacity=".35"/><rect x="3" y="9" width="6" height="6" fill="currentColor" opacity=".35"/><rect x="15" y="9" width="6" height="6" fill="currentColor" opacity=".35"/><rect x="9" y="15" width="6" height="6" fill="currentColor" opacity=".35"/>',
-    box: '<rect x="3" y="8" width="18" height="8" rx="1" fill="currentColor"/>',
+    blur: ph("drop"),
+    pixelate: ph("squares-four"),
+    box: ph("square"),
   },
 });
 

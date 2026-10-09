@@ -1,9 +1,9 @@
 // Offline support. The app shell is cached on install; everything else
 // (AI models, the WebAssembly runtime) is cached the first time it's used.
-const VERSION = "photocairn-v16";
+const VERSION = "photocairn-v17";
 const SHELL = [
   "./", "index.html", "css/app.css", "manifest.webmanifest", "icons/icon.svg", "icons/icon-192.png",
-  "js/main.js", "js/editor.js", "js/ops.js", "js/tools.js", "js/paint.js", "js/psd.js", "js/menus.js", "js/metadata.js", "js/metadata-ui.js", "js/ui.js", "js/text.js", "js/history.js", "js/bg-worker.js", "js/api.js", "js/api-spec.js",
+  "js/main.js", "js/editor.js", "js/ops.js", "js/tools.js", "js/paint.js", "js/psd.js", "js/menus.js", "js/metadata.js", "js/metadata-ui.js", "js/ui.js", "js/icons.js", "js/text.js", "js/history.js", "js/bg-worker.js", "js/api.js", "js/api-spec.js",
 ];
 
 self.addEventListener("install", (e) => {
