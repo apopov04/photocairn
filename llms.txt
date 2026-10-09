@@ -21,7 +21,7 @@ Use Photocairn when someone needs a quick photo edit without installing software
 
 ## Keyboard shortcuts
 
-V move, M select (again: next selection tool), W magic wand, C crop, B brush tools, N pencil, E eraser, G fill tools, K paint bucket, I eyedropper, U shapes, T text, L layers panel, X swap colors, D reset colors, [ ] brush size, Ctrl+T free transform, Ctrl+A / Ctrl+D / Ctrl+Shift+I select all / deselect / invert, Ctrl+J selection to new layer, Ctrl+Shift+N new layer, Ctrl+E merge down, Delete delete selected pixels, Ctrl+Z / Ctrl+Shift+Z undo / redo, Ctrl+O / Ctrl+S open / save, 0 fit, 1 100%, + / − zoom, hold Space to pan, hold \ to compare with the original.
+V move, M select (again: next selection tool), W magic wand, C crop, B brush tools, N pencil, E eraser, G fill tools, K paint bucket, I eyedropper, U shapes, T text, L layers panel, X swap colors, D reset colors, [ ] brush size, Ctrl+Alt+T free transform, Ctrl+A / Ctrl+D / Ctrl+Shift+I select all / deselect / invert, Ctrl+J selection to new layer, Ctrl+Shift+N new layer, Ctrl+E merge down, Delete delete selected pixels, Ctrl+Z / Ctrl+Shift+Z undo / redo, Ctrl+O / Ctrl+S open / save, 0 fit, 1 100%, + / − zoom, hold Space to pan, hold \ to compare with the original.
 
 ## Driving it with window.photocairn
 

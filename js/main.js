@@ -742,7 +742,9 @@ addEventListener("keydown", (e) => {
   if (mod && e.shiftKey && k === "n") { e.preventDefault(); L().addBlank(); return; }
   if (mod && k === "e") { e.preventDefault(); L().mergeDown(); return; }
   if (mod && k === "j") { e.preventDefault(); P.selectionToLayer(A, false, makeLayer); return; }
-  if (mod && k === "t") { e.preventDefault(); selectTool("transform", false); return; }
+  // Ctrl+T is reserved by browsers (new tab), so Free transform is Ctrl+Alt+T (as in Photopea).
+  // e.code, because on a Mac Option changes e.key.
+  if (mod && e.altKey && e.code === "KeyT") { e.preventDefault(); selectTool("transform", false); return; }
   if ((e.key === "Delete" || e.key === "Backspace") && !mod) { e.preventDefault(); P.clearSelection(A); return; }
   if (!mod && !e.altKey) {
     // B / M / G / U select the brush / select / fill / shapes group; pressing again (or with Shift) cycles through its variants.
@@ -920,7 +922,7 @@ function shortcutsDialog() {
     ["Move / Select / Crop", "V / M / C"], ["Next selection tool (Ellipse, Lasso…)", "M again / Shift+M"], ["Magic wand", "W"], ["Brush tools / Pencil / Eraser", "B / N / E"], ["Next brush tool (Pen, Highlighter…)", "B again / Shift+B"],
     ["Fill tools / Paint bucket", "G / K"], ["Next fill tool (Bucket, Gradient)", "G again / Shift+G"], ["Eyedropper", "I"],
     ["Shapes / Text", "U / T"], ["Next shape (Line, Arrow, Rectangle, Ellipse)", "U again / Shift+U"],
-    ["Other tools in a toolbar group", "Right-click or long-press it"], ["Free transform", "Ctrl+T"], ["Swap / reset colors", "X / D"], ["Brush size", "[ / ]"],
+    ["Other tools in a toolbar group", "Right-click or long-press it"], ["Free transform", "Ctrl+Alt+T"], ["Swap / reset colors", "X / D"], ["Brush size", "[ / ]"],
     ["Select all / Deselect / Invert", "Ctrl+A / Ctrl+D / Ctrl+Shift+I"], ["Copy / Cut / Paste", "Ctrl+C / Ctrl+X / Ctrl+V"],
     ["Selection to new layer", "Ctrl+J"], ["New layer / Merge down", "Ctrl+Shift+N / Ctrl+E"], ["Delete selected pixels", "Delete"],
     ["Undo / Redo", "Ctrl+Z / Ctrl+Shift+Z"], ["Open / Save", "Ctrl+O / Ctrl+S"], ["Zoom / Fit / 100%", "+ − / 0 / 1"],
@@ -962,7 +964,7 @@ buildMenus($("#menus"), $("#btn-menu"), [
     { label: "Cut", shortcut: "Ctrl+X", action: () => copyToClipboard(true), enabled: has },
     { label: "Copy", shortcut: "Ctrl+C", action: () => copyToClipboard(false), enabled: has },
     "-",
-    { label: "Free transform", shortcut: "Ctrl+T", action: () => selectTool("transform"), enabled: has },
+    { label: "Free transform", shortcut: "Ctrl+Alt+T", action: () => selectTool("transform"), enabled: has },
     { label: "Fill with main color", action: () => P.fillSelection(A), enabled: has },
     { label: "Clear", shortcut: "Delete", action: () => P.clearSelection(A), enabled: hasSel },
   ] },
