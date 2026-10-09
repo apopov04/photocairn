@@ -1,6 +1,6 @@
 :root {
   --bg: #f6f6f8; --surface: #ffffff; --surface-2: #efeff3; --line: #e2e2e8;
-  --text: #17171b; --muted: #6c6c75; --accent: #3a6df0; --accent-ink: #fff;
+  --text: #17171b; --muted: #6c6c75; --accent: #0F5468; --accent-ink: #fff;
   --danger: #d93f3f; --radius: 12px; --shadow: 0 8px 30px rgba(20, 20, 30, .10);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   color-scheme: light dark;
@@ -8,7 +8,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #111214; --surface: #1b1c20; --surface-2: #25262b; --line: #2f3036;
-    --text: #ececf1; --muted: #9a9aa5; --accent: #6b93ff; --accent-ink: #0b0d12;
+    --text: #ececf1; --muted: #9a9aa5; --accent: #4FA3BA; --accent-ink: #0b0d12;
     --shadow: 0 8px 30px rgba(0, 0, 0, .45);
   }
 }
@@ -157,8 +157,6 @@ dialog input[type=number] { width: 100%; padding: 8px 10px; border: 1px solid va
 .drop p { color: var(--muted); margin: 0 auto 20px; max-width: 440px; }
 .drop p strong { color: var(--text); font-weight: 600; }
 .drop .hint { margin: 14px 0 0; font-size: 13px; }
-.features { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 260px)); gap: 10px 24px; color: var(--muted); font-size: 13px; }
-.features b { color: var(--text); font-weight: 600; }
 .foot { color: var(--muted); font-size: 12px; margin: 0; }
 .show-touch { display: none; }
 @media (hover: none) { .show-touch { display: inline; } .hide-touch { display: none; } }
@@ -184,8 +182,7 @@ dialog input[type=number] { width: 100%; padding: 8px 10px; border: 1px solid va
   .color-well .bg { left: 26px; top: 18px; }
   .workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
   .panel { width: auto; max-height: 46dvh; border-left: 0; border-top: 1px solid var(--line); padding: 12px 14px 14px; gap: 12px; box-shadow: 0 -8px 24px rgba(0,0,0,.06); }
-  .features { grid-template-columns: 1fr; }
-  .drop { padding: 30px 18px; }
+    .drop { padding: 30px 18px; }
   .toast { bottom: 96px; }
 }
 .panel .row button.grow { white-space: nowrap; font-size: 13px; padding-left: 8px; padding-right: 8px; }

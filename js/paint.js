@@ -757,7 +757,7 @@ export function selectTool(A, makeLayer, kind = "rect") {
       return false;
     },
     overlay(ctx, view) {
-      const style = () => { ctx.strokeStyle = "#3a6df0"; ctx.fillStyle = "rgba(58,109,240,.12)"; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); };
+      const style = () => { ctx.strokeStyle = "#0F5468"; ctx.fillStyle = "rgba(15,84,104,.12)"; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); };
       if (poly) {
         const pts = hover ? [...poly.pts, hover] : poly.pts;
         style();
@@ -766,7 +766,7 @@ export function selectTool(A, makeLayer, kind = "rect") {
         if (pts.length > 2) ctx.fill();
         ctx.stroke();
         const s0 = view.toScreen(poly.pts[0].x, poly.pts[0].y);
-        ctx.setLineDash([]); ctx.fillStyle = hover && near(hover, poly.pts[0]) ? "#3a6df0" : "#fff";
+        ctx.setLineDash([]); ctx.fillStyle = hover && near(hover, poly.pts[0]) ? "#0F5468" : "#fff";
         ctx.beginPath(); ctx.arc(s0.x, s0.y, 4.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
         return;
       }
@@ -1030,7 +1030,7 @@ export function transformTool(A) {
     overlay(ctx, view) {
       if (!st) return;
       const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => view.toScreen(...Object.values(toWorld({ x: (sx * st.w) / 2, y: (sy * st.h) / 2 }))));
-      ctx.strokeStyle = "#3a6df0"; ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "#0F5468"; ctx.lineWidth = 1.5;
       ctx.beginPath(); pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.closePath(); ctx.stroke();
       ctx.fillStyle = "#fff";
       for (const [sx, sy] of HANDLES) {

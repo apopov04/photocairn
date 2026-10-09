@@ -152,7 +152,7 @@ export const COLOR_NAMES = { "#ffffff": "White", "#000000": "Black", "#ff3b30": 
  *  group (e.g. "Text color"); each swatch is a toggle button with aria-pressed. */
 export function swatches({ value, onChange, transparent = false, extra = [], label = "Color" }) {
   const el = h("div", { class: "swatches", role: "group", "aria-label": label });
-  const picker = h("input", { type: "color", value: /^#[0-9a-f]{6}$/i.test(value) ? value : "#3a6df0", title: "Custom color", "aria-label": `${label}: custom` });
+  const picker = h("input", { type: "color", value: /^#[0-9a-f]{6}$/i.test(value) ? value : "#0F5468", title: "Custom color", "aria-label": `${label}: custom` });
   const set = (v) => {
     value = v;
     for (const b of el.querySelectorAll(".swatch")) markRadio(b, b.dataset.v === v);

@@ -701,7 +701,7 @@ export function redactTool(A, mode = "blur") {
     overlay(ctx, view) {
       if (!drag) return;
       const a = view.toScreen(drag.a.x, drag.a.y), b = view.toScreen(drag.b.x, drag.b.y);
-      ctx.fillStyle = "rgba(58,109,240,.18)"; ctx.strokeStyle = "#3a6df0"; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
+      ctx.fillStyle = "rgba(15,84,104,.18)"; ctx.strokeStyle = "#0F5468"; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
       ctx.fillRect(a.x, a.y, b.x - a.x, b.y - a.y); ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
     },
   };
@@ -970,14 +970,14 @@ export function textTool(A) {
       };
       if (drag?.type === "new" && drag.moved) {
         const s = drag.start, e = drag.end;
-        box({ x: Math.min(s.x, e.x), y: Math.min(s.y, e.y), w: Math.abs(e.x - s.x), h: Math.abs(e.y - s.y) }, [5, 4], "rgba(58,109,240,.9)");
+        box({ x: Math.min(s.x, e.x), y: Math.min(s.y, e.y), w: Math.abs(e.x - s.x), h: Math.abs(e.y - s.y) }, [5, 4], "rgba(15,84,104,.9)");
       }
       const hl = A.doc.layers[hoverIdx];
-      if (hl?.meta?.text && hl.id !== cur?.id) box(textBox(hl.meta.text), [3, 3], "rgba(58,109,240,.7)");
+      if (hl?.meta?.text && hl.id !== cur?.id) box(textBox(hl.meta.text), [3, 3], "rgba(15,84,104,.7)");
       if (!cur || indexOf(cur.id) < 0) return;
       const L = measureText(cur.t);
-      const a = box({ x: cur.t.x, y: cur.t.y, w: L.w, h: L.h }, [5, 4], "rgba(58,109,240,.95)");
-      ctx.setLineDash([]); ctx.fillStyle = "#fff"; ctx.strokeStyle = "#3a6df0"; ctx.lineWidth = 1.5;
+      const a = box({ x: cur.t.x, y: cur.t.y, w: L.w, h: L.h }, [5, 4], "rgba(15,84,104,.95)");
+      ctx.setLineDash([]); ctx.fillStyle = "#fff"; ctx.strokeStyle = "#0F5468"; ctx.lineWidth = 1.5;
       for (const x of [a.x, a.x + L.w * view.zoom]) {
         ctx.beginPath(); ctx.rect(Math.round(x) - 4.5, Math.round(a.y + (L.h * view.zoom) / 2) - 6.5, 9, 13); ctx.fill(); ctx.stroke();
       }
