@@ -7,6 +7,14 @@
   Referrer-Policy: no-referrer
   Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()
 
+# App code: always check for a newer version (cheap revalidation via ETag),
+# so updates show up on the next reload instead of after the 4-hour default.
+/css/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+/js/*
+  Cache-Control: public, max-age=0, must-revalidate
+
 /models/*
   Cache-Control: public, max-age=31536000, immutable
 
