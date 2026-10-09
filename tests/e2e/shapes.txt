@@ -1,0 +1,27 @@
+tool:shape-rect
+dragimg:[100, 100, 300, 250]
+eval:(() => { const d = __photocairn.doc, l = d.layers[d.active]; return `layers=${d.layers.length} active=${l.name} shape=${JSON.stringify(l.meta.shape && [l.meta.shape.kind, Math.round(l.meta.shape.a.x), Math.round(l.meta.shape.b.x)])}`; })()
+dragimg:[300, 250, 400, 320]
+eval:(() => { const s = __photocairn.doc.layer.meta.shape; return `after corner drag b=${Math.round(s.b.x)},${Math.round(s.b.y)} a=${Math.round(s.a.x)},${Math.round(s.a.y)}`; })()
+dragimg:[200, 101, 230, 131]
+eval:(() => { const s = __photocairn.doc.layer.meta.shape; return `after move a=${Math.round(s.a.x)},${Math.round(s.a.y)} b=${Math.round(s.b.x)},${Math.round(s.b.y)}`; })()
+click:#panel .swatch[data-v="#ff3b30"]
+eval:"color=" + __photocairn.doc.layer.meta.shape.color
+type:#panel input[type=number]:12
+key:Enter
+eval:"size=" + __photocairn.doc.layer.meta.shape.size
+shot:SH1-shape-selected
+tool:arrow
+dragimg:[450, 400, 550, 300]
+eval:(() => { const d = __photocairn.doc; return `layers=${d.layers.length} active=${d.layer.name} kind=${d.layer.meta.shape?.kind}`; })()
+dragimg:[550, 300, 600, 250]
+eval:(() => { const s = __photocairn.doc.layer.meta.shape; return `arrow tip moved to ${Math.round(s.b.x)},${Math.round(s.b.y)}`; })()
+tool:shape-rect
+tap:0.5:0.5
+eval:"clicking the rectangle selects it: " + __photocairn.doc.layer.name
+tool:brush
+drag:0.3:0.3:0.32:0.32
+eval:"after brush: shape meta=" + !!__photocairn.doc.layer.meta.shape + " toast=" + document.querySelector(".toast")?.textContent
+key:Control+z
+eval:"after undo: shape meta=" + !!__photocairn.doc.layer.meta.shape
+eval:[...document.querySelectorAll(".layers .lsub")].map((e) => e.textContent).join("|")

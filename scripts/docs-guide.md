@@ -148,7 +148,7 @@ The editor looks like a small Photoshop: a menu bar (File, Edit, Image, Layer, S
 - **Eraser** (E): Brush (soft, with hardness) or Block (square, pixel-exact); size and opacity. API: `brushStroke({ kind: "eraser" })`.
 - **Fill tools** (G, Shift+G cycles): **Paint bucket** (K; tolerance 0 to 100, default 32; opacity; contiguous; sample all layers) and **Gradient** (linear or radial, from the main color to the second color or to transparent; opacity). API: `fill()` (no gradient).
 - **Eyedropper** (I): sample 1 px, 3×3 or 5×5, from all layers or the current one. Alt+click sets the second color. No API.
-- **Shapes** (U, Shift+U cycles): Line, Arrow, Rectangle and Ellipse; line width, opacity, filled (rectangle and ellipse). Shift keeps 45° angles or a perfect square or circle. API: `drawShape()`.
+- **Shapes** (U, Shift+U cycles): Line, Arrow, Rectangle and Ellipse; line width, opacity, filled (rectangle and ellipse). Shift keeps 45° angles or a perfect square or circle. API: `drawShape()`. Each shape gets its own layer and stays editable: with the Shapes tool, drag its handles to resize, drag it to move, and change color, width, opacity or fill. Painting or filtering it turns it into pixels.
 - **Text** (T): click to add text or drag to draw a wrapping text box. Font (Sans, Serif, Bold, Mono, Casual), size, weight (Light to Black), alignment, text color, background color, italic and outline. Each text is an editable text layer: click it with the Text tool, or double-click it, to change it. Painting or filtering a text layer turns it into pixels. API: `addText()`, `editText()`.
 - **Colors**: main and second color at the bottom of the toolbar. X swaps them, D resets to black and white.
 

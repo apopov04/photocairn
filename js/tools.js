@@ -1191,7 +1191,7 @@ export function layersPanel(A) {
       eye.onclick = (e) => { e.stopPropagation(); d.setLayerProps(i, { visible: !l.visible }); };
       const locked = l.lock && Object.values(l.lock).some(Boolean);
       const name = h("span", { class: "lname", title: "Double-click to rename" }, l.name);
-      const sub = h("span", { class: "lsub" }, [l.meta?.text ? "Text" : "", l.opacity < 1 ? `${Math.round(l.opacity * 100)}%` : "", l.blend !== "source-over" ? BLEND_MODES.find((b) => b[0] === l.blend)[1] : ""].filter(Boolean).join(" · "));
+      const sub = h("span", { class: "lsub" }, [l.meta?.text ? "Text" : l.meta?.shape ? "Shape" : "", l.opacity < 1 ? `${Math.round(l.opacity * 100)}%` : "", l.blend !== "source-over" ? BLEND_MODES.find((b) => b[0] === l.blend)[1] : ""].filter(Boolean).join(" · "));
       const li = h("li", {
         class: `${i === d.active ? "active" : ""} ${l.visible ? "" : "hidden-layer"}`, tabindex: 0,
         // Named for assistive tech; the current layer is marked with aria-current.
@@ -1244,7 +1244,7 @@ export function layerOps(A) {
     }),
     duplicate: () => A.doc.label("Duplicate layer").change((d) => {
       const l = d.layer;
-      d.layers.splice(d.active + 1, 0, makeLayer(copyCanvas(l.canvas), `${l.name} copy`, { opacity: l.opacity, blend: l.blend, visible: l.visible, over: l.over, meta: l.meta.text ? { text: l.meta.text } : {} }));
+      d.layers.splice(d.active + 1, 0, makeLayer(copyCanvas(l.canvas), `${l.name} copy`, { opacity: l.opacity, blend: l.blend, visible: l.visible, over: l.over, meta: l.meta.text ? { text: l.meta.text } : l.meta.shape ? { shape: l.meta.shape } : {} }));
       d.active += 1;
     }),
     remove: () => {

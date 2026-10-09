@@ -224,7 +224,10 @@ function setDoc(d) {
 }
 
 function onDocChange() {
-  if (doc.rasterized) { doc.rasterized = false; toast("Text rasterized: it's now pixels and can no longer be edited as text."); }
+  if (doc.rasterized) {
+    const k = doc.rasterized === "shape" ? "Shape" : "Text";
+    doc.rasterized = false; toast(`${k} rasterized: it's now pixels and can no longer be edited as ${k === "Shape" ? "a shape" : "text"}.`);
+  }
   display();
   updateChrome();
   updateLayerNote();

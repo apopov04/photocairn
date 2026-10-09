@@ -7,7 +7,7 @@
 // the current selection and the layer's "lock transparent pixels" setting.
 
 import * as ops from "./ops.js";
-import { makeCanvas, copyCanvas, getImageData, layerExtent, layerFromExtent } from "./editor.js";
+import { makeCanvas, copyCanvas, getImageData, layerExtent, layerFromExtent, makeLayer } from "./editor.js";
 import { h, slider, seg, swatches } from "./ui.js";
 import { targetsFrom, snapBox, snapPoint, drawGuides } from "./snap.js";
 import { textBox } from "./text.js";
@@ -306,6 +306,26 @@ export const SHAPES = [
   { value: "shape-ellipse", label: "Ellipse" },
 ];
 
+/** Render a shape layer's pixels from its parameters (layer.meta.shape). */
+export function renderShape(d, s) {
+  const c = makeCanvas(d.width, d.height), x = c.getContext("2d");
+  x.globalAlpha = (s.opacity ?? 100) / 100;
+  x.strokeStyle = x.fillStyle = s.color;
+  x.lineWidth = s.size; x.lineCap = x.lineJoin = "round";
+  shapePath(x, s.kind, s.a, s.b, s.size);
+  if (s.fill && (s.kind === "rect" || s.kind === "ellipse")) x.fill(); else x.stroke();
+  return c;
+}
+
+const SHAPE_NAMES = { line: "Line", arrow: "Arrow", rect: "Rectangle", ellipse: "Ellipse" };
+
+/**
+ * Shapes. Each shape goes on its own layer and stays editable (like text):
+ * with the Shapes tool, drag its handles to resize, drag inside to move, and
+ * change color, width, opacity or fill in the panel. Painting on it or using
+ * filters turns it into pixels. With a selection active, shapes are painted
+ * straight into the current layer (clipped to the selection) as before.
+ */
 export function shapesTool(A, variant = "shape-rect") {
   const sv = SHAPES.find((s) => s.value === variant) || SHAPES[2];
   const kind = sv.value.replace("shape-", ""), closed = kind === "rect" || kind === "ellipse";
@@ -313,42 +333,129 @@ export function shapesTool(A, variant = "shape-rect") {
   const saved = JSON.parse(localStorage.getItem("pc-shapes") || "null") || {};
   const o = { kind, size: saved.size || Math.max(2, Math.round(minSide(A.doc) / 160)), fill: !!saved.fill, opacity: saved.opacity ?? 100 };
   const save = () => localStorage.setItem("pc-shapes", JSON.stringify(o));
-  let g = null;
+  let g = null, edit = null;
   const colors = colorRow(A);
-  const fillBox = h("input", { type: "checkbox", checked: o.fill, onchange: (e) => { o.fill = e.target.checked; save(); } });
-  const render = () => {
-    const d = A.doc, paint = makeCanvas(d.width, d.height), x = paint.getContext("2d");
-    x.strokeStyle = x.fillStyle = A.colors.fg;
-    x.lineWidth = o.size; x.lineCap = x.lineJoin = "round";
-    shapePath(x, o.kind, g.a, g.b, o.size);
-    if (o.fill && (o.kind === "rect" || o.kind === "ellipse")) x.fill(); else x.stroke();
-    return applyPaint(A, g.base, paint, { opacity: o.opacity / 100 });
+  const shapeOf = (l) => l?.meta?.shape || null;
+  const cur = () => shapeOf(A.doc.layer);
+  // Panel changes restyle the selected shape layer (one undo step each).
+  const restyle = (patch) => {
+    const s = cur(); if (!s || !guard(A)) return;
+    const n = { ...s, ...patch }, k = Object.keys(patch)[0];
+    A.doc.label({ color: "Shape color", size: "Shape width", opacity: "Shape opacity", fill: "Shape fill" }[k] || "Edit shape");
+    A.doc.commit(renderShape(A.doc, n), { shape: n });
   };
-  const throttled = frameThrottle(() => g && A.setSource(render()));
+  const fillBox = h("input", { type: "checkbox", checked: o.fill, onchange: (e) => { o.fill = e.target.checked; save(); if (cur() && /rect|ellipse/.test(cur().kind)) restyle({ fill: o.fill }); } });
+  const sizeS = slider({ label: "Line width", min: 1, max: Math.max(40, Math.round(minSide(A.doc) / 12)), value: o.size, format: (v) => `${v} px`, onInput: (v) => { o.size = v; save(); }, onChange: (v) => restyle({ size: v }) });
+  const opS = slider({ label: "Opacity", min: 1, max: 100, value: o.opacity, format: (v) => `${v}%`, onInput: (v) => { o.opacity = v; save(); }, onChange: (v) => restyle({ opacity: v }) });
+  const sync = () => { const s = cur(); if (s) { sizeS.set(s.size); opS.set(s.opacity ?? 100); fillBox.checked = !!s.fill; } };
+
+  // Handles: corners for rectangles/ellipses, the two ends for lines/arrows.
+  const handles = (s) => (s.kind === "rect" || s.kind === "ellipse"
+    ? [{ x: s.a.x, y: s.a.y }, { x: s.b.x, y: s.a.y }, { x: s.b.x, y: s.b.y }, { x: s.a.x, y: s.b.y }]
+    : [s.a, s.b]);
+  const tol = () => 9 / A.view.zoom;
+  const hitHandle = (s, p) => handles(s).findIndex((q) => Math.hypot(q.x - p.x, q.y - p.y) <= tol());
+  const inside = (s, p) => {
+    const pad = Math.max(s.size / 2, tol());
+    if (s.kind === "line" || s.kind === "arrow") { // distance to the segment
+      const dx = s.b.x - s.a.x, dy = s.b.y - s.a.y, t = Math.max(0, Math.min(1, ((p.x - s.a.x) * dx + (p.y - s.a.y) * dy) / (dx * dx + dy * dy || 1)));
+      return Math.hypot(p.x - (s.a.x + t * dx), p.y - (s.a.y + t * dy)) <= pad;
+    }
+    return p.x >= Math.min(s.a.x, s.b.x) - pad && p.x <= Math.max(s.a.x, s.b.x) + pad && p.y >= Math.min(s.a.y, s.b.y) - pad && p.y <= Math.max(s.a.y, s.b.y) + pad;
+  };
+  const edited = (s0, p) => {
+    const dx = p.x - edit.start.x, dy = p.y - edit.start.y;
+    if (edit.mode === "move") return { ...s0, a: { x: s0.a.x + dx, y: s0.a.y + dy }, b: { x: s0.b.x + dx, y: s0.b.y + dy } };
+    const s = { ...s0, a: { ...s0.a }, b: { ...s0.b } };
+    if (s.kind === "line" || s.kind === "arrow") { (edit.i === 0 ? s.a : s.b).x = p.x; (edit.i === 0 ? s.a : s.b).y = p.y; return s; }
+    // Corner i: 0 = (a.x, a.y), 1 = (b.x, a.y), 2 = (b.x, b.y), 3 = (a.x, b.y)
+    if (edit.i === 0 || edit.i === 3) s.a.x = p.x; else s.b.x = p.x;
+    if (edit.i === 0 || edit.i === 1) s.a.y = p.y; else s.b.y = p.y;
+    return s;
+  };
+  const constrain = (a, p, e, k) => {
+    if (!e?.shiftKey) return p;
+    const dx = p.x - a.x, dy = p.y - a.y;
+    if (k === "rect" || k === "ellipse") { const m = Math.max(Math.abs(dx), Math.abs(dy)); return { x: a.x + Math.sign(dx || 1) * m, y: a.y + Math.sign(dy || 1) * m }; }
+    const ang = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4), len = Math.hypot(dx, dy);
+    return { x: a.x + Math.cos(ang) * len, y: a.y + Math.sin(ang) * len };
+  };
+  const newShape = () => ({ kind: o.kind, a: g.a, b: g.b, color: A.colors.fg, size: o.size, fill: o.fill && closed, opacity: o.opacity });
+  // While drawing a new shape, preview it on top of the current layer.
+  const preview = () => {
+    const out = copyCanvas(g.base);
+    if (g.clip) return applyPaint(A, g.base, renderShape(A.doc, { ...newShape(), opacity: 100 }), { opacity: o.opacity / 100 });
+    out.getContext("2d").drawImage(renderShape(A.doc, newShape()), 0, 0);
+    return out;
+  };
+  const throttled = frameThrottle(() => {
+    if (g) A.setSource(preview());
+    else if (edit?.s) A.setSource(renderShape(A.doc, edit.s));
+  });
   return {
     title: sv.label,
     body: [
-      colors,
-      slider({ label: "Line width", min: 1, max: Math.max(40, Math.round(minSide(A.doc) / 12)), value: o.size, format: (v) => `${v} px`, onInput: (v) => { o.size = v; save(); } }),
-      slider({ label: "Opacity", min: 1, max: 100, value: o.opacity, format: (v) => `${v}%`, onInput: (v) => { o.opacity = v; save(); } }),
+      colors, sizeS, opS,
       closed ? h("label", { class: "checkbox" }, fillBox, "Filled") : null,
-      h("p", { class: "hint" }, closed ? `Drag to draw. Hold Shift for a perfect ${kind === "rect" ? "square" : "circle"}.` : "Drag to draw. Hold Shift for 45° angles."),
+      h("p", { class: "hint" }, `Drag to draw (Shift: ${closed ? `perfect ${kind === "rect" ? "square" : "circle"}` : "45° angles"}). Each shape gets its own layer and stays editable: drag its handles to resize, drag it to move, and change color or width here.`),
     ].filter(Boolean),
     cursor: "crosshair",
     wantsPointer: true,
-    onColorChange() { colors.sync(); },
-    down(p) { if (!guard(A)) return; g = { base: A.doc.canvas, a: p, b: p }; throttled(); },
-    move(p, e) {
-      if (!g) return;
-      if (e?.shiftKey) {
-        const dx = p.x - g.a.x, dy = p.y - g.a.y;
-        if (o.kind === "rect" || o.kind === "ellipse") { const m = Math.max(Math.abs(dx), Math.abs(dy)); p = { x: g.a.x + Math.sign(dx || 1) * m, y: g.a.y + Math.sign(dy || 1) * m }; }
-        else { const ang = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4), len = Math.hypot(dx, dy); p = { x: g.a.x + Math.cos(ang) * len, y: g.a.y + Math.sin(ang) * len }; }
+    onColorChange() { colors.sync(); if (cur() && !g && !edit) restyle({ color: A.colors.fg }); },
+    onDocChange() { sync(); A.redraw(); },
+    down(p) {
+      const s = cur();
+      if (s) {
+        const i = hitHandle(s, p);
+        if (i >= 0 || inside(s, p)) { if (!guard(A, "position")) return; edit = { mode: i >= 0 ? "handle" : "move", i, start: p, s0: s }; return; }
       }
-      g.b = p;
+      // Clicking another shape layer selects it.
+      const L = A.doc.layers;
+      for (let i = L.length - 1; i >= 0; i--) {
+        if (i !== A.doc.active && L[i].visible && shapeOf(L[i]) && inside(shapeOf(L[i]), p)) { A.doc.active = i; A.doc.emit(); return; }
+      }
+      if (!guard(A)) return;
+      g = { base: A.doc.canvas, a: p, b: p, clip: !!A.doc.selection };
       throttled();
     },
-    up() { if (!g) return; const out = render(); g = null; A.setSource(null); A.doc.commit(out, {}); },
+    move(p, e) {
+      if (edit) {
+        const anchor = edit.mode === "handle" ? handles(edit.s0)[edit.s0.kind === "line" || edit.s0.kind === "arrow" ? 1 - edit.i : (edit.i + 2) % 4] : null;
+        edit.s = edited(edit.s0, anchor ? constrain(anchor, p, e, edit.s0.kind) : p);
+        throttled(); A.redraw(); return;
+      }
+      if (!g) return;
+      g.b = constrain(g.a, p, e, o.kind);
+      throttled();
+    },
+    up() {
+      if (edit) {
+        const { s } = edit, edit0 = edit; edit = null; A.setSource(null);
+        if (s) { A.doc.label(edit0.mode === "move" ? "Move shape" : "Resize shape"); A.doc.commit(renderShape(A.doc, s), { shape: s }); }
+        return;
+      }
+      if (!g) return;
+      const sh = newShape(), out = g.clip ? preview() : null;
+      const tiny = Math.hypot(g.b.x - g.a.x, g.b.y - g.a.y) < 2;
+      g = null; A.setSource(null);
+      if (tiny) return;
+      if (out) return A.doc.commit(out, {}); // selection: paint into the layer, clipped
+      A.doc.change((d) => {
+        d.layers.splice(d.active + 1, 0, makeLayer(renderShape(d, sh), SHAPE_NAMES[sh.kind], { meta: { shape: sh } }));
+        d.active += 1;
+      });
+    },
+    overlay(ctx, view) {
+      const s = edit?.s || cur();
+      if (!s || g) return;
+      const pts = handles(s).map((q) => view.toScreen(q.x, q.y));
+      ctx.save();
+      ctx.strokeStyle = "#0F5468"; ctx.lineWidth = 1;
+      if (pts.length === 4) { ctx.setLineDash([4, 3]); ctx.beginPath(); pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.closePath(); ctx.stroke(); ctx.setLineDash([]); }
+      ctx.fillStyle = "#fff"; ctx.lineWidth = 1.5;
+      for (const q of pts) { ctx.beginPath(); ctx.rect(q.x - 5, q.y - 5, 10, 10); ctx.fill(); ctx.stroke(); }
+      ctx.restore();
+    },
     cleanup() { A.setSource(null); },
   };
 }
@@ -837,8 +944,11 @@ function commitExtent(A, ext, meta = {}) {
 
 /** Moving a whole text layer keeps it editable: its text box moves along. */
 function movedMeta(A, dx, dy) {
-  const t = A.doc.meta.text;
-  return t && !A.doc.selection ? { text: { ...t, x: t.x + dx, y: t.y + dy } } : {};
+  const { text: t, shape: s } = A.doc.meta;
+  if (A.doc.selection) return {};
+  if (t) return { text: { ...t, x: t.x + dx, y: t.y + dy } };
+  if (s) return { shape: { ...s, a: { x: s.a.x + dx, y: s.a.y + dy }, b: { x: s.b.x + dx, y: s.b.y + dy } } };
+  return {};
 }
 
 /* ---------------------------------- snapping --------------------------------- */
