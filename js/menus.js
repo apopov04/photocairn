@@ -5,6 +5,9 @@
 
 import { h } from "./ui.js";
 
+/** "Ctrl+Shift+Z" → "Control+Shift+Z" (aria-keyshortcuts syntax). Single keys like "+" or "0" pass through. */
+const keyShortcut = (s) => s.split(" / ")[0].replace(/\bCtrl\b/g, "Control").replace("−", "-");
+
 export function buildMenus(bar, toggleBtn, spec) {
   let open = null; // { index, el }
 
@@ -13,32 +16,35 @@ export function buildMenus(bar, toggleBtn, spec) {
     open.el.remove();
     bar.children[open.index]?.classList.remove("open");
     bar.children[open.index]?.setAttribute("aria-expanded", "false");
+    bar.children[open.index]?.removeAttribute("aria-controls");
     open = null;
   };
 
   const itemEls = (menu, done) => menu.items.map((it) => {
     if (it === "-") return h("li", { class: "msep", role: "separator" });
     const enabled = it.enabled ? it.enabled() : true;
+    // The shortcut is shown in a <kbd>; assistive tech gets it as aria-keyshortcuts instead of in the name.
     const btn = h("button", {
-      role: "menuitem", disabled: !enabled,
+      role: "menuitem", disabled: !enabled, "aria-label": it.label, "aria-keyshortcuts": it.shortcut ? keyShortcut(it.shortcut) : null,
       onclick: () => { done(); it.action(); },
     }, h("span", {}, it.label), it.shortcut ? h("kbd", {}, it.shortcut) : null);
-    return h("li", {}, btn);
+    return h("li", { role: "none" }, btn);
   });
 
   const openMenu = (i, focusFirst = false) => {
     close();
     const btn = bar.children[i], r = btn.getBoundingClientRect();
-    const el = h("ul", { class: "menu-pop", role: "menu", style: `left:${Math.round(r.left)}px;top:${Math.round(r.bottom + 2)}px` }, itemEls(spec[i], close));
+    const el = h("ul", { class: "menu-pop", role: "menu", id: "menu-pop", "aria-labelledby": btn.id, style: `left:${Math.round(r.left)}px;top:${Math.round(r.bottom + 2)}px` }, itemEls(spec[i], close));
     document.body.append(el);
     btn.classList.add("open");
     btn.setAttribute("aria-expanded", "true");
+    btn.setAttribute("aria-controls", "menu-pop");
     open = { index: i, el };
     if (focusFirst) el.querySelector("button:not(:disabled)")?.focus();
   };
 
   spec.forEach((menu, i) => {
-    const b = h("button", { class: "menu-btn", role: "menuitem", "aria-haspopup": "true", "aria-expanded": "false" }, menu.label);
+    const b = h("button", { class: "menu-btn", role: "menuitem", id: `menu-${i}`, "aria-haspopup": "menu", "aria-expanded": "false" }, menu.label);
     b.addEventListener("pointerdown", (e) => { e.preventDefault(); open?.index === i ? close() : openMenu(i); });
     b.addEventListener("pointerenter", () => { if (open && open.index !== i) openMenu(i); });
     b.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") { e.preventDefault(); openMenu(i, true); } });
@@ -47,12 +53,16 @@ export function buildMenus(bar, toggleBtn, spec) {
 
   // Mobile: one sheet with every menu as a section.
   let sheet = null;
-  const closeSheet = () => { sheet?.remove(); sheet = null; };
+  const closeSheet = () => { sheet?.remove(); sheet = null; toggleBtn.setAttribute("aria-expanded", "false"); };
+  toggleBtn.setAttribute("aria-expanded", "false");
+  toggleBtn.setAttribute("aria-controls", "menu-sheet");
   toggleBtn.addEventListener("click", () => {
     if (sheet) return closeSheet();
-    sheet = h("div", { class: "menu-sheet", role: "menu" },
-      spec.map((menu) => h("section", {}, h("h3", {}, menu.label), h("ul", {}, itemEls(menu, closeSheet)))));
+    sheet = h("div", { class: "menu-sheet", role: "menu", id: "menu-sheet", "aria-label": "Menu" },
+      spec.map((menu, i) => h("section", { role: "none" }, h("h3", { id: `menu-sheet-${i}`, role: "presentation" }, menu.label),
+        h("ul", { role: "group", "aria-labelledby": `menu-sheet-${i}` }, itemEls(menu, closeSheet)))));
     document.body.append(sheet);
+    toggleBtn.setAttribute("aria-expanded", "true");
   });
 
   addEventListener("pointerdown", (e) => {

@@ -3,7 +3,7 @@
 
 import { Doc, View, makeCanvas, resizeCanvas, makeLayer } from "./editor.js";
 import { formatBytes, fitSize } from "./ops.js";
-import { h, numField } from "./ui.js";
+import { h, numField, markRadio } from "./ui.js";
 import * as T from "./tools.js";
 import * as P from "./paint.js";
 import * as PSD from "./psd.js";
@@ -103,6 +103,7 @@ view.drawOverlay = (ctx, v) => {
 
 let toastTimer;
 function toast(msg, ms = 2600) {
+  if (toastEl.textContent === msg) toastEl.textContent = ""; // so a live region re-announces a repeated message
   toastEl.textContent = msg;
   toastEl.classList.add("show");
   clearTimeout(toastTimer);
@@ -228,6 +229,14 @@ function onDocChange() {
 function updateChrome() {
   $("#btn-undo").disabled = !doc?.canUndo;
   $("#btn-redo").disabled = !doc?.canRedo;
+  labelStage();
+}
+
+/** The canvas's accessible name: what's open and how big it is (for screen readers and browser agents). */
+function labelStage() {
+  const n = doc?.layers.length || 0;
+  const label = doc ? `Image canvas: ${doc.name}, ${doc.width} × ${doc.height} px${n > 1 ? `, ${n} layers` : ""}` : "Image canvas (no image open)";
+  if (view.stage.getAttribute("aria-label") !== label) view.stage.setAttribute("aria-label", label);
 }
 
 /* ------------------------------- new blank image ------------------------------ */
@@ -241,12 +250,12 @@ function newImageDialog() {
   let bg = localStorage.getItem("pc-new-bg") || "white";
   const wIn = h("input", { type: "number", min: 1, max: 8000, value: localStorage.getItem("pc-new-w") || 1080, required: true });
   const hIn = h("input", { type: "number", min: 1, max: 8000, value: localStorage.getItem("pc-new-h") || 1080, required: true });
-  const bgSeg = h("div", { class: "seg" }, ...[["white", "White"], ["transparent", "Transparent"], ["fg", "Main color"]].map(([v, label]) =>
-    h("button", { type: "button", class: v === bg ? "on" : "", onclick: (e) => { bg = v; for (const b of bgSeg.children) b.classList.toggle("on", b === e.currentTarget); } }, label)));
-  const dlg = h("dialog", { "aria-label": "New image" },
+  const bgSeg = h("div", { class: "seg", role: "radiogroup", "aria-label": "Background" }, ...[["white", "White"], ["transparent", "Transparent"], ["fg", "Main color"]].map(([v, label]) =>
+    h("button", { type: "button", role: "radio", "aria-label": label, "aria-checked": String(v === bg), class: v === bg ? "on" : "", onclick: (e) => { bg = v; for (const b of bgSeg.children) markRadio(b, b === e.currentTarget); } }, label)));
+  const dlg = h("dialog", { "aria-labelledby": "dlg-new-title", "aria-modal": "true" },
     h("form", { method: "dialog" },
-      h("h2", {}, "New blank image"),
-      h("div", { class: "seg" }, ...NEW_PRESETS.map(([label, w, hh, title]) => h("button", { type: "button", title, onclick: () => { wIn.value = w; hIn.value = hh; } }, label))),
+      h("h2", { id: "dlg-new-title" }, "New blank image"),
+      h("div", { class: "seg", role: "group", "aria-label": "Size presets" }, ...NEW_PRESETS.map(([label, w, hh, title]) => h("button", { type: "button", title, onclick: () => { wIn.value = w; hIn.value = hh; } }, label))),
       h("div", { class: "row", style: "display:flex;gap:10px" }, h("label", { style: "flex:1" }, "Width (px)", wIn), h("label", { style: "flex:1" }, "Height (px)", hIn)),
       h("label", {}, "Background", bgSeg),
       h("div", { class: "row", style: "display:flex;gap:8px;justify-content:flex-end" },
@@ -344,8 +353,17 @@ function selectTool(name, toggle = false) {
   );
   updateLayerNote();
   markTool();
+  describeStage();
   showTab("props");
   view.dirty = true;
+}
+
+/** Point the canvas's description at the current tool's name and hint, e.g. "Brush. Shift+click draws a straight line…". */
+function describeStage() {
+  const head = panel.querySelector(".panel-head h2"), hint = panel.querySelector(".hint");
+  if (head) head.id = "tool-title";
+  if (hint) hint.id = "tool-hint";
+  view.stage.setAttribute("aria-describedby", [head && "tool-title", hint && "tool-hint"].filter(Boolean).join(" "));
 }
 
 // Tools that edit only the selected layer (others act on the whole image).
@@ -358,7 +376,10 @@ function updateLayerNote() {
 }
 
 function markTool() {
-  for (const b of document.querySelectorAll("#tools button")) b.classList.toggle("active", b.dataset.tool === toolName);
+  for (const b of document.querySelectorAll("#tools button[data-tool]")) {
+    b.classList.toggle("active", b.dataset.tool === toolName);
+    b.setAttribute("aria-pressed", String(b.dataset.tool === toolName));
+  }
   $("#btn-export").classList.toggle("on", toolName === "export");
 }
 
@@ -379,7 +400,8 @@ $("#tools").addEventListener("click", (e) => {
 // differ from the group's own tool name (which means "the current variant").
 // Variants: { value, label, short?: rail label, key?: own shortcut }.
 const GROUPS = [];
-function toolGroup({ tool, name, variants, icons, storage, key = "", tip = "", initial }) {
+// `group` names the rail button for assistive tech: "Brush tool group: Pencil".
+function toolGroup({ tool, name, group, variants, icons, storage, key = "", tip = "", initial }) {
   const btn = $(`#tools button[data-tool="${tool}"]`);
   const keys = variants.map((v) => v.value);
   const saved = localStorage.getItem(storage);
@@ -394,12 +416,20 @@ function toolGroup({ tool, name, variants, icons, storage, key = "", tip = "", i
       const it = variants.find((x) => x.value === v), k = it.key || key;
       btn.innerHTML = `<svg viewBox="0 0 24 24">${icons[v]}</svg><span>${it.short || it.label}</span>`;
       btn.title = `${tip}${it.label}${k ? ` (${k})` : ""}. ${key ? `${key} cycles through ${name.toLowerCase()}. ` : ""}Right-click or long-press to choose.`;
-      btn.setAttribute("aria-label", tip + it.label);
+      btn.setAttribute("aria-label", `${group} tool group: ${it.label}`);
+      if (k) btn.setAttribute("aria-keyshortcuts", k);
     },
   };
   btn.classList.add("group");
   btn.setAttribute("aria-haspopup", "menu");
+  btn.setAttribute("aria-expanded", "false");
   g.set(g.value);
+  // Keyboard: Arrow Down opens the variants with the current one focused.
+  btn.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowDown" || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault(); e.stopPropagation();
+    openFlyout(g, true);
+  });
   btn.addEventListener("contextmenu", (e) => { e.preventDefault(); if (flyout?.group !== g) openFlyout(g); });
   btn.addEventListener("pointerdown", (e) => {
     if (e.button) return;
@@ -419,16 +449,24 @@ function toolGroup({ tool, name, variants, icons, storage, key = "", tip = "", i
 
 // The flyout menu (one at a time).
 let flyout = null, longPressed = false, pressTimer = 0;
-function closeFlyout() { flyout?.remove(); flyout = null; }
-function openFlyout(g) {
+function closeFlyout() {
+  if (!flyout) return;
+  flyout.group.btn.setAttribute("aria-expanded", "false");
+  flyout.group.btn.removeAttribute("aria-controls");
+  flyout.remove(); flyout = null;
+}
+function openFlyout(g, focus = false) {
   if (!doc) return;
   closeFlyout();
-  flyout = h("ul", { class: "menu-pop tool-flyout", role: "menu", "aria-label": g.name }, g.variants.map((v) => h("li", {},
+  flyout = h("ul", { class: "menu-pop tool-flyout", role: "menu", id: "tool-flyout", "aria-label": g.name }, g.variants.map((v) => h("li", { role: "none" },
     h("button", {
       role: "menuitemradio", "aria-checked": String(v.value === g.value), class: v.value === g.value ? "on" : null,
+      "aria-label": v.label, "aria-keyshortcuts": v.key || null,
       onclick: () => { closeFlyout(); selectTool(v.value); },
     }, h("span", { html: `<svg viewBox="0 0 24 24">${g.icons[v.value]}</svg>` }, v.label), v.key ? h("kbd", {}, v.key) : null))));
   flyout.group = g;
+  g.btn.setAttribute("aria-expanded", "true");
+  g.btn.setAttribute("aria-controls", "tool-flyout");
   document.body.append(flyout);
   // Beside the button (left rail), or above it when that doesn't fit (bottom rail on phones).
   const r = g.btn.getBoundingClientRect(), fw = flyout.offsetWidth, fh = flyout.offsetHeight;
@@ -436,6 +474,7 @@ function openFlyout(g) {
   if (top + fh > innerHeight - 4) { left = r.left; top = r.top - fh - 4; }
   flyout.style.left = `${Math.max(4, Math.min(left, innerWidth - fw - 4))}px`;
   flyout.style.top = `${Math.max(4, top)}px`;
+  if (focus) flyout.querySelector('[aria-checked="true"]')?.focus();
 }
 addEventListener("pointerdown", (e) => { if (flyout && !flyout.contains(e.target)) closeFlyout(); }, true);
 addEventListener("keydown", (e) => {
@@ -451,7 +490,7 @@ $("#tools").addEventListener("scroll", closeFlyout);
 
 // Brush group: brush, pencil, pen, highlighter.
 toolGroup({
-  tool: "paint", name: "Brush tools", variants: P.BRUSHES, storage: "pc-brush-tool", key: "B",
+  tool: "paint", name: "Brush tools", group: "Brush", variants: P.BRUSHES, storage: "pc-brush-tool", key: "B",
   icons: {
     brush: '<path d="M18.4 2.6a2 2 0 0 1 2.9 2.9L11 15.8 8.2 13z"/><path d="M7 14c-2 0-3 1.5-3 3 0 1.2-.8 2.2-2 3 3 1 7 .5 8-3z"/>',
     pencil: '<path d="M15 4l5 5L9 20H4v-5z"/><path d="M13 6l5 5"/>',
@@ -462,7 +501,7 @@ toolGroup({
 
 // Select group: rectangle, ellipse, lasso, polygon, magic wand (stored as pc-sel, as before).
 toolGroup({
-  tool: "select", name: "Selection tools", variants: P.SEL_KINDS, storage: "pc-sel", key: "M", tip: "Select: ",
+  tool: "select", name: "Selection tools", group: "Select", variants: P.SEL_KINDS, storage: "pc-sel", key: "M", tip: "Select: ",
   icons: {
     rect: '<rect x="4" y="4" width="16" height="16" rx="1" stroke-dasharray="3 3"/>',
     ellipse: '<ellipse cx="12" cy="12" rx="9" ry="7" stroke-dasharray="3 3"/>',
@@ -474,7 +513,7 @@ toolGroup({
 
 // Fill group: paint bucket and gradient.
 toolGroup({
-  tool: "fills", name: "Fill tools", variants: P.FILLS, storage: "pc-fill-tool", key: "G",
+  tool: "fills", name: "Fill tools", group: "Fill", variants: P.FILLS, storage: "pc-fill-tool", key: "G",
   icons: {
     fill: '<path d="M5 11l7-7 7 7-7 7z"/><path d="M5 11h14"/><path d="M20 15s2 2.5 2 3.5a2 2 0 0 1-4 0c0-1 2-3.5 2-3.5z"/>',
     gradient: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18" opacity=".5"/><path d="M9 3v18" opacity=".3"/>',
@@ -483,7 +522,7 @@ toolGroup({
 
 // Shapes group: line, arrow, rectangle, ellipse (rectangle by default, or the kind last used before shapes became a group).
 toolGroup({
-  tool: "shapes", name: "Shapes", variants: P.SHAPES, storage: "pc-shape-tool", key: "U",
+  tool: "shapes", name: "Shapes", group: "Shapes", variants: P.SHAPES, storage: "pc-shape-tool", key: "U",
   initial: ((k) => (k === "line" || k === "arrow" ? k : `shape-${k || "rect"}`))(JSON.parse(localStorage.getItem("pc-shapes") || "null")?.kind),
   icons: {
     line: '<path d="M4 20L20 4"/>',
@@ -495,7 +534,7 @@ toolGroup({
 
 // Redact group: blur, pixelate, solid box (stored as pc-redact, as before).
 toolGroup({
-  tool: "redact", name: "Blur out tools", variants: T.REDACT_MODES, storage: "pc-redact", tip: "Blur out: ",
+  tool: "redact", name: "Blur out tools", group: "Blur out", variants: T.REDACT_MODES, storage: "pc-redact", tip: "Blur out: ",
   icons: {
     blur: '<circle cx="12" cy="12" r="8" opacity=".35"/><circle cx="12" cy="12" r="5" opacity=".65"/><circle cx="12" cy="12" r="2"/>',
     pixelate: '<rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 9h6V3M9 9v6h6V9h6M3 15h6v6M15 15v6M15 15h6"/><rect x="9" y="3" width="6" height="6" fill="currentColor" opacity=".35"/><rect x="3" y="9" width="6" height="6" fill="currentColor" opacity=".35"/><rect x="15" y="9" width="6" height="6" fill="currentColor" opacity=".35"/><rect x="9" y="15" width="6" height="6" fill="currentColor" opacity=".35"/>',
@@ -525,10 +564,24 @@ function stepLabel() {
 }
 function showTab(tab) {
   side.dataset.tab = tab;
-  for (const b of side.querySelectorAll(".side-tabs button")) b.classList.toggle("on", b.dataset.tab === tab);
+  for (const b of side.querySelectorAll(".side-tabs button")) {
+    const on = b.dataset.tab === tab;
+    b.classList.toggle("on", on);
+    b.setAttribute("aria-selected", String(on));
+    b.tabIndex = on ? 0 : -1;
+  }
 }
 showTab("props");
 side.querySelector(".side-tabs").addEventListener("click", (e) => { const b = e.target.closest("button[data-tab]"); if (b) showTab(b.dataset.tab); });
+// Keyboard: arrow keys move between the tabs (the usual tablist pattern).
+side.querySelector(".side-tabs").addEventListener("keydown", (e) => {
+  const tabs = [...side.querySelectorAll(".side-tabs button")], i = tabs.indexOf(document.activeElement);
+  const j = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+  if (i < 0 || j === undefined) return;
+  e.preventDefault(); e.stopPropagation();
+  const t = tabs[(j + tabs.length) % tabs.length];
+  showTab(t.dataset.tab); t.focus();
+});
 
 const layerFileInput = h("input", { type: "file", accept: "image/*,.psd", hidden: true });
 layerFileInput.onchange = () => { const f = layerFileInput.files[0]; layerFileInput.value = ""; if (f) addImageLayer(f, f.name); };
@@ -626,7 +679,12 @@ stageWrap.addEventListener("wheel", (e) => {
   }
 }, { passive: false });
 
-function updateZoomLabel() { $("#zoom-label").textContent = `${Math.round(view.zoom * 100)}%`; }
+function updateZoomLabel() {
+  const z = `${Math.round(view.zoom * 100)}%`, el = $("#zoom-label");
+  if (el.textContent === z) return;
+  el.textContent = z;
+  el.setAttribute("aria-label", `Zoom ${z} (set to 100%)`);
+}
 const origRender = view.render.bind(view);
 view.render = () => { origRender(); updateZoomLabel(); };
 
@@ -634,6 +692,7 @@ $("#btn-fit").onclick = () => view.fit();
 $("#btn-zoom-in").onclick = () => { view.zoomAt(1.25, view.cssW / 2, view.cssH / 2); };
 $("#btn-zoom-out").onclick = () => { view.zoomAt(0.8, view.cssW / 2, view.cssH / 2); };
 $("#zoom-label").onclick = () => view.actualSize();
+$("#zoom-label").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); view.actualSize(); } });
 $("#zoom-label").style.cursor = "pointer";
 $("#btn-undo").onclick = () => doc?.undo();
 $("#btn-redo").onclick = () => doc?.redo();
@@ -648,10 +707,12 @@ function compare(on) {
     view.source = doc.original; view.imgW = doc.original.width; view.imgH = doc.original.height; view.drawOverlay = null;
     view.fit();
     $("#btn-compare").classList.add("on");
+    $("#btn-compare").setAttribute("aria-pressed", "true");
   } else if (!on && comparing) {
     Object.assign(view, { source: comparing.source, imgW: comparing.w, imgH: comparing.h, zoom: comparing.zoom, panX: comparing.panX, panY: comparing.panY, drawOverlay: comparing.overlay });
     comparing = null; view.dirty = true;
     $("#btn-compare").classList.remove("on");
+    $("#btn-compare").setAttribute("aria-pressed", "false");
   }
 }
 const cmp = $("#btn-compare");
@@ -758,12 +819,13 @@ function exportTool() {
   const qOut = numField(q, { unit: "%", label: "Quality" }), sOut = numField(sc, { unit: "%", label: "Size" });
   q.parentElement.querySelector("output").replaceWith(qOut); sc.parentElement.querySelector("output").replaceWith(sOut);
   const syncUi = () => {
-    for (const b of segEl.children) b.classList.toggle("on", b.dataset.v === o.format);
+    for (const b of segEl.children) markRadio(b, b.dataset.v === o.format);
     const psd = o.format === "image/vnd.adobe.photoshop";
     qRow.hidden = o.format === "image/png" || psd;
     sc.parentElement.hidden = psd;
   };
   for (const b of segEl.children) {
+    b.setAttribute("aria-label", b.textContent);
     if (b.dataset.v === "image/webp" && !WEBP) { b.disabled = true; b.title = "This browser can't save WebP"; }
     b.onclick = () => {
       o.format = b.dataset.v; localStorage.setItem("pc-format", o.format); syncUi(); refresh();
@@ -863,9 +925,9 @@ function shortcutsDialog() {
     ["Undo / Redo", "Ctrl+Z / Ctrl+Shift+Z"], ["Open / Save", "Ctrl+O / Ctrl+S"], ["Zoom / Fit / 100%", "+ − / 0 / 1"],
     ["Pan", "Hold Space"], ["Compare with original", "Hold \\"], ["Layers panel", "L"],
   ];
-  const dlg = h("dialog", { "aria-label": "Keyboard shortcuts" },
-    h("h2", {}, "Keyboard shortcuts"),
-    h("table", { class: "keys" }, rows.map(([a, b]) => h("tr", {}, h("td", {}, a), h("td", {}, h("kbd", {}, b))))),
+  const dlg = h("dialog", { "aria-labelledby": "dlg-keys-title", "aria-modal": "true" },
+    h("h2", { id: "dlg-keys-title" }, "Keyboard shortcuts"),
+    h("table", { class: "keys", "aria-label": "Shortcuts" }, rows.map(([a, b]) => h("tr", {}, h("td", {}, a), h("td", {}, h("kbd", {}, b))))),
     h("p", { class: "note" }, "Click a step in History to go back to it (or forward again). Drag the lines between Tool, History and Layers to resize them; double-click a line to reset it."),
     h("div", { style: "display:flex;justify-content:flex-end;margin-top:12px" }, h("button", { class: "primary", onclick: () => dlg.close() }, "Close")));
   dlg.addEventListener("close", () => dlg.remove());
@@ -873,7 +935,7 @@ function shortcutsDialog() {
 }
 
 function aboutDialog() {
-  const dlg = h("dialog", { "aria-label": "About Photocairn" },
+  const dlg = h("dialog", { "aria-label": "About Photocairn", "aria-modal": "true" },
     h("h2", {}, "Photocairn"),
     h("p", {}, "A free, private photo editor that runs entirely in your browser. No ads, no account, and your images are never uploaded."),
     h("p", {}, "Open source (MIT): ", h("a", { href: "https://github.com/apopov04/photocairn", target: "_blank", rel: "noopener" }, "github.com/apopov04/photocairn")),

@@ -76,7 +76,7 @@ export function withinSelection(A, base, edited) {
 }
 
 function colorRow(A, which = "fg") {
-  const sw = swatches({ value: A.colors[which], onChange: (v) => A.setColor(which, v) });
+  const sw = swatches({ value: A.colors[which], label: which === "fg" ? "Main color" : "Second color", onChange: (v) => A.setColor(which, v) });
   sw.sync = () => sw.set(A.colors[which]);
   return sw;
 }
@@ -203,9 +203,9 @@ export function paintTool(A, kind = "brush") {
   const hardS = slider({ label: "Hardness", min: 0, max: 100, value: o.hardness, format: (v) => `${v}%`, onInput: (v) => { o.hardness = v; save(); } });
   const opS = slider({ label: "Opacity", min: 1, max: 100, value: o.opacity, format: (v) => `${v}%`, onInput: (v) => { o.opacity = v; save(); } });
   const colors = kind === "eraser" ? null
-    : chisel ? Object.assign(swatches({ value: o.color, onChange: (v) => { o.color = v; save(); } }), { sync() {} })
+    : chisel ? Object.assign(swatches({ value: o.color, label: "Highlighter color", onChange: (v) => { o.color = v; save(); } }), { sync() {} })
     : colorRow(A);
-  const modeSeg = kind === "eraser" ? seg([{ value: "soft", label: "Brush" }, { value: "block", label: "Block" }], o.block ? "block" : "soft", (v) => { o.block = v === "block"; hardS.hidden = !hasHardness(); save(); }) : null;
+  const modeSeg = kind === "eraser" ? seg([{ value: "soft", label: "Brush" }, { value: "block", label: "Block" }], o.block ? "block" : "soft", (v) => { o.block = v === "block"; hardS.hidden = !hasHardness(); save(); }, "Eraser mode") : null;
   hardS.hidden = !hasHardness();
   const paintOpts = () => ({ opacity: o.opacity / 100, erase: kind === "eraser", blend: chisel ? "multiply" : "source-over" });
 
@@ -380,8 +380,8 @@ export function eyedropperTool(A) {
     body: [
       h("p", { class: "hint" }, "Click or drag on the image to pick a color. Alt+click picks the background color."),
       out,
-      h("label", {}, "Sample", seg([{ value: "1", label: "1 px" }, { value: "3", label: "3×3" }, { value: "5", label: "5×5" }], String(pickSample), (v) => { pickSample = +v; localStorage.setItem("pc-pick-size", v); })),
-      h("label", {}, "From", seg([{ value: "all", label: "All layers" }, { value: "layer", label: "Current layer" }], pickAll ? "all" : "layer", (v) => { pickAll = v === "all"; localStorage.setItem("pc-pick-all", pickAll ? "1" : "0"); })),
+      h("label", {}, "Sample", seg([{ value: "1", label: "1 px" }, { value: "3", label: "3×3" }, { value: "5", label: "5×5" }], String(pickSample), (v) => { pickSample = +v; localStorage.setItem("pc-pick-size", v); }, "Sample")),
+      h("label", {}, "From", seg([{ value: "all", label: "All layers" }, { value: "layer", label: "Current layer" }], pickAll ? "all" : "layer", (v) => { pickAll = v === "all"; localStorage.setItem("pc-pick-all", pickAll ? "1" : "0"); }, "From")),
     ],
     cursor: "crosshair",
     wantsPointer: true,
@@ -469,8 +469,8 @@ export function gradientTool(A) {
     body: [
       h("p", { class: "hint" }, "Drag across the image: the gradient runs from start to end. Uses the colors at the bottom of the toolbar."),
       preview,
-      h("label", {}, "Style", seg([{ value: "linear", label: "Linear" }, { value: "radial", label: "Radial" }], o.type, (v) => { o.type = v; save(); })),
-      h("label", {}, "Fade to", seg([{ value: "bg", label: "Second color" }, { value: "clear", label: "Transparent" }], o.to, (v) => { o.to = v; save(); sync(); })),
+      h("label", {}, "Style", seg([{ value: "linear", label: "Linear" }, { value: "radial", label: "Radial" }], o.type, (v) => { o.type = v; save(); }, "Style")),
+      h("label", {}, "Fade to", seg([{ value: "bg", label: "Second color" }, { value: "clear", label: "Transparent" }], o.to, (v) => { o.to = v; save(); sync(); }, "Fade to")),
       slider({ label: "Opacity", min: 1, max: 100, value: o.opacity, format: (v) => `${v}%`, onInput: (v) => { o.opacity = v; save(); } }),
     ],
     cursor: "crosshair",
@@ -664,7 +664,7 @@ export function selectTool(A, makeLayer, kind = "rect") {
   const saveWand = () => localStorage.setItem("pc-wand", JSON.stringify(wand));
   const modeSeg = seg([
     { value: "new", label: "New" }, { value: "add", label: "Add" }, { value: "subtract", label: "Subtract" }, { value: "intersect", label: "Intersect" },
-  ], selMode, (v) => { selMode = v; });
+  ], selMode, (v) => { selMode = v; }, "Mode");
   const has = () => !!A.doc.selection;
   const actions = h("div", { class: "layer-actions" });
   const sync = () => {
@@ -979,9 +979,9 @@ export function transformTool(A) {
       h("div", { class: "row" }, h("label", { class: "grow" }, "Width %", wIn), h("label", { class: "grow" }, "Height %", hIn), h("label", { class: "grow" }, "Angle °", aIn)),
       h("label", { class: "checkbox" }, keep, "Keep proportions"),
       h("div", { class: "row" },
-        h("button", { class: "grow", onclick: () => { if (st) { st.fx *= -1; sync(); } } }, "↔ Flip"),
-        h("button", { class: "grow", onclick: () => { if (st) { st.fy *= -1; sync(); } } }, "↕ Flip"),
-        h("button", { class: "grow", onclick: () => { if (st) { st.angle += Math.PI / 2; sync(); } } }, "↻ 90°")),
+        h("button", { class: "grow", "aria-label": "Flip horizontally", onclick: () => { if (st) { st.fx *= -1; sync(); } } }, "↔ Flip"),
+        h("button", { class: "grow", "aria-label": "Flip vertically", onclick: () => { if (st) { st.fy *= -1; sync(); } } }, "↕ Flip"),
+        h("button", { class: "grow", "aria-label": "Rotate 90° clockwise", onclick: () => { if (st) { st.angle += Math.PI / 2; sync(); } } }, "↻ 90°")),
       h("div", { class: "row" }, h("button", { class: "primary grow", onclick: apply }, "Apply"), h("button", { onclick: cancel }, "Cancel")),
     ],
     wantsPointer: true,

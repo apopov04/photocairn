@@ -59,6 +59,7 @@ export function resizableStack(sections) {
   const apply = () => {
     mid.style.height = sizes.history ? `${sizes.history}px` : "";
     bot.style.height = sizes.layers ? `${sizes.layers}px` : "";
+    requestAnimationFrame(() => describe()); // after layout (and after the handles below exist)
   };
   const save = () => localStorage.setItem(STORE, JSON.stringify(sizes));
   apply();
@@ -77,9 +78,21 @@ export function resizableStack(sections) {
     apply();
   }
 
+  // aria-valuenow: the share (%) of the two neighbouring sections taken by the one above the handle.
+  const names = [["Tool options", "History"], ["History", "Layers"]];
+  const describe = () => handles.forEach((el, i) => {
+    const a = hgt(sections[i]), b = hgt(sections[i + 1]);
+    if (!(a + b)) return;
+    const pct = Math.round((a / (a + b)) * 100);
+    if (el.getAttribute("aria-valuenow") === String(pct)) return;
+    el.setAttribute("aria-valuenow", pct);
+    el.setAttribute("aria-valuetext", `${names[i][0]} ${Math.round(a)} px, ${names[i][1]} ${Math.round(b)} px`);
+  });
+
   const handles = [top, mid].map((above, i) => {
     const el = h("div", {
-      class: "split", role: "separator", tabindex: 0, "aria-orientation": "horizontal",
+      class: "split", role: "separator", tabindex: 0, "aria-orientation": "horizontal", "aria-valuemin": 0, "aria-valuemax": 100,
+      "aria-controls": [above.id, sections[i + 1].id].filter(Boolean).join(" ") || null,
       "aria-label": i === 0 ? "Resize tool options and History" : "Resize History and Layers",
       title: "Drag to resize. Double-click to reset",
     });
@@ -106,5 +119,7 @@ export function resizableStack(sections) {
     });
     return el;
   });
+  const ro = new ResizeObserver(describe);
+  for (const s of sections) ro.observe(s);
   return { handles, reset() { sizes = {}; apply(); save(); } };
 }

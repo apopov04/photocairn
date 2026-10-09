@@ -21,6 +21,8 @@ export function h(tag, attrs = {}, ...children) {
  * Arrow up/down nudge by one step (Shift: ten steps), Escape reverts. Returns a
  * `<span class="num">` holding the field and the unit; call `.sync()` after setting
  * `range.value` from code. Dragging the range keeps the field in sync on its own.
+ * The field gets the same accessible name as the range (`label`), and both carry the
+ * unit in aria-valuetext ("40 px"), so screen readers and agents hear one control.
  */
 export function numField(range, { unit = "", label } = {}) {
   const num = (k, d) => (range.getAttribute(k) === null || range.getAttribute(k) === "" ? d : +range.getAttribute(k));
@@ -30,7 +32,7 @@ export function numField(range, { unit = "", label } = {}) {
     type: "number", class: "numf", min, max, step, value: range.value,
     // iOS's decimal keypad has no minus key, so fields that go negative get the default keyboard.
     inputmode: min < 0 ? null : "decimal",
-    "aria-label": label ? `${label}${unit ? ` (${unit})` : ""}` : null,
+    "aria-label": label || null,
     enterkeyhint: "done", autocomplete: "off",
   });
   const fit = (v) => {
@@ -38,7 +40,12 @@ export function numField(range, { unit = "", label } = {}) {
     v = min + Math.round((v - min) / step) * step;
     return +Math.min(max, v).toFixed(decimals);
   };
-  const sync = () => { field.value = String(+range.value); };
+  const valueText = (v) => (unit ? `${v}${unit === "%" || unit === "°" ? "" : " "}${unit}` : null);
+  const sync = () => {
+    field.value = String(+range.value);
+    const t = valueText(+range.value);
+    if (t) { field.setAttribute("aria-valuetext", t); range.setAttribute("aria-valuetext", t); }
+  };
   const commit = (v) => {
     if (!Number.isFinite(v)) { sync(); return; }
     v = fit(v);
@@ -64,7 +71,9 @@ export function numField(range, { unit = "", label } = {}) {
   // No live commits from the mouse wheel over a focused field: scrolling the panel shouldn't edit values.
   field.addEventListener("wheel", () => field.blur(), { passive: true });
   range.addEventListener("input", () => { if (document.activeElement !== field) sync(); });
-  const el = h("span", { class: "num" }, field, unit || null);
+  sync();
+  // The visible unit is already in each control's aria-valuetext.
+  const el = h("span", { class: "num" }, field, unit ? h("span", { "aria-hidden": "true" }, unit) : null);
   el.field = field;
   el.sync = sync;
   return el;
@@ -91,8 +100,9 @@ export function slider({ label, min, max, value = 0, step = 1, format = (v) => v
   if (unit === undefined) unit = unitOf(format, +min, +max);
   let out, sync;
   if (unit === null) { // non-numeric label: read-only output as before
-    out = h("output", {}, format(value));
-    sync = () => { out.textContent = format(+input.value); };
+    out = h("output", { "aria-hidden": "true" }, format(value)); // the range itself carries this as aria-valuetext
+    sync = () => { out.textContent = format(+input.value); input.setAttribute("aria-valuetext", String(format(+input.value))); };
+    sync();
   } else {
     out = numField(input, { unit, label });
     sync = out.sync;
@@ -111,33 +121,44 @@ export function slider({ label, min, max, value = 0, step = 1, format = (v) => v
   return el;
 }
 
-/** Segmented single-choice buttons. options: [{ value, label, title }] */
-export function seg(options, value, onChange) {
-  const el = h("div", { class: "seg", role: "radiogroup" });
+/** Segmented single-choice buttons. options: [{ value, label, title }]. `label` names the group
+ *  for assistive tech (usually the visible caption next to it). */
+export function seg(options, value, onChange, label) {
+  const el = h("div", { class: "seg", role: "radiogroup", "aria-label": label });
   const set = (v) => {
     value = v;
-    for (const b of el.children) b.classList.toggle("on", b.dataset.v === String(v));
+    for (const b of el.children) markRadio(b, b.dataset.v === String(v));
   };
   for (const o of options) {
-    el.append(h("button", { "data-v": String(o.value), title: o.title, disabled: o.disabled, onclick: () => { set(o.value); onChange?.(o.value); } }, o.label));
+    // An explicit name: inside a wrapping <label> the first button would otherwise be named after the caption.
+    el.append(h("button", { type: "button", role: "radio", "aria-label": typeof o.label === "string" ? o.label : null, "data-v": String(o.value), title: o.title, disabled: o.disabled, onclick: () => { set(o.value); onChange?.(o.value); } }, o.label));
   }
   set(value);
   el.set = set;
   return el;
 }
 
-export const PALETTE = ["#ffffff", "#000000", "#ff3b30", "#ff9500", "#ffcc00", "#34c759", "#0a84ff", "#af52de"];
+/** Mark one option of a single-choice group: the "on" look plus aria-checked (radios) or aria-pressed. */
+export function markRadio(b, on) {
+  b.classList.toggle("on", on);
+  b.setAttribute(b.getAttribute("role") === "radio" ? "aria-checked" : "aria-pressed", String(on));
+}
 
-/** Color swatches plus a custom color picker. Optional "transparent" choice. */
-export function swatches({ value, onChange, transparent = false, extra = [] }) {
-  const el = h("div", { class: "swatches" });
-  const picker = h("input", { type: "color", value: /^#[0-9a-f]{6}$/i.test(value) ? value : "#3a6df0", title: "Custom color" });
+export const PALETTE = ["#ffffff", "#000000", "#ff3b30", "#ff9500", "#ffcc00", "#34c759", "#0a84ff", "#af52de"];
+/** Spoken names for the palette (the tooltips keep the hex codes). */
+export const COLOR_NAMES = { "#ffffff": "White", "#000000": "Black", "#ff3b30": "Red", "#ff9500": "Orange", "#ffcc00": "Yellow", "#34c759": "Green", "#0a84ff": "Blue", "#af52de": "Purple" };
+
+/** Color swatches plus a custom color picker. Optional "transparent" choice. `label` names the
+ *  group (e.g. "Text color"); each swatch is a toggle button with aria-pressed. */
+export function swatches({ value, onChange, transparent = false, extra = [], label = "Color" }) {
+  const el = h("div", { class: "swatches", role: "group", "aria-label": label });
+  const picker = h("input", { type: "color", value: /^#[0-9a-f]{6}$/i.test(value) ? value : "#3a6df0", title: "Custom color", "aria-label": `${label}: custom` });
   const set = (v) => {
     value = v;
-    for (const b of el.querySelectorAll(".swatch")) b.classList.toggle("on", b.dataset.v === v);
+    for (const b of el.querySelectorAll(".swatch")) markRadio(b, b.dataset.v === v);
   };
   const add = (v, title, cls = "") => el.append(h("button", {
-    class: `swatch ${cls}`, "data-v": v, title, "aria-label": title,
+    type: "button", class: `swatch ${cls}`, "data-v": v, title, "aria-label": COLOR_NAMES[v] || title,
     style: cls ? "" : `background:${v}`, onclick: () => { set(v); onChange(v); },
   }));
   if (transparent) add("transparent", "Transparent", "transparent");
@@ -150,10 +171,17 @@ export function swatches({ value, onChange, transparent = false, extra = [] }) {
   return el;
 }
 
-export function progress() {
+/** Progress bar. set(fraction) or set(null) for indeterminate. */
+export function progress(label = "Progress") {
   const bar = h("i");
-  const el = h("div", { class: "progress" }, bar);
-  el.set = (p) => { el.classList.toggle("indeterminate", p == null); bar.style.width = p == null ? "" : `${Math.round(p * 100)}%`; };
+  const el = h("div", { class: "progress", role: "progressbar", "aria-label": label, "aria-valuemin": 0, "aria-valuemax": 100 });
+  el.append(bar);
+  el.set = (p) => {
+    el.classList.toggle("indeterminate", p == null);
+    bar.style.width = p == null ? "" : `${Math.round(p * 100)}%`;
+    if (p == null) el.removeAttribute("aria-valuenow"); // indeterminate
+    else el.setAttribute("aria-valuenow", Math.round(p * 100));
+  };
   return el;
 }
 

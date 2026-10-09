@@ -90,14 +90,14 @@ export async function metadataDialog({ file = null, toast }) {
     h("span", {}, ` ${meta.gps.lat}, ${meta.gps.lon} · `),
     h("a", { href: `https://www.openstreetmap.org/?mlat=${meta.gps.lat}&mlon=${meta.gps.lon}#map=16/${meta.gps.lat}/${meta.gps.lon}`, target: "_blank", rel: "noopener noreferrer" }, "View on map")) : null;
 
-  const dlg = h("dialog", { class: "wide", "aria-label": "Photo metadata" },
+  const dlg = h("dialog", { class: "wide", "aria-labelledby": "dlg-meta-title", "aria-describedby": "dlg-meta-file", "aria-modal": "true" },
     h("div", { class: "md-head" },
-      h("h2", {}, "Photo metadata"),
+      h("h2", { id: "dlg-meta-title" }, "Photo metadata"),
       h("button", { class: "x", "aria-label": "Close", onclick: () => dlg.close() }, "×")),
-    h("p", { class: "meta" }, `${name} · ${meta.format} · ${formatBytes(bytes.length)}`),
+    h("p", { class: "meta", id: "dlg-meta-file" }, `${name} · ${meta.format} · ${formatBytes(bytes.length)}`),
     gpsBox,
     meta.items.length
-      ? h("div", { class: "md-presets" }, h("span", {}, "Remove:"),
+      ? h("div", { class: "md-presets", role: "group", "aria-labelledby": "dlg-meta-presets" }, h("span", { id: "dlg-meta-presets" }, "Remove:"),
         h("button", { onclick: () => preset((i) => i.defaultRemove) }, "Private info"),
         h("button", { onclick: () => preset(() => true) }, "Everything"),
         h("button", { onclick: () => preset(() => false) }, "Nothing"))

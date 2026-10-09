@@ -4,7 +4,7 @@
 
 import * as ops from "./ops.js";
 import { makeCanvas, ctx2d, copyCanvas, getImageData, canvasFromImageData, resizeCanvas, makeLayer, BLEND_MODES } from "./editor.js";
-import { h, slider, numField, seg, swatches, progress, nextFrame } from "./ui.js";
+import { h, slider, numField, seg, swatches, progress, nextFrame, markRadio } from "./ui.js";
 import { guard, withinSelection } from "./paint.js";
 import { renderText, measureText, textBox, textLayerAt, layerName } from "./text.js";
 export { textLayerAt };
@@ -122,12 +122,12 @@ export function cutoutTool(A) {
   let model = localStorage.getItem("pc-model") || "fast";
   let busy = false, brushMode = null, size = 0, hover = null, stroke = null;
   const status = h("p", { class: "hint" }, "Finds the main subject and removes everything else. The AI runs on this device; your photo isn't uploaded.");
-  const bar = progress(); bar.hidden = true;
+  const bar = progress("Background removal progress"); bar.hidden = true;
   const run = h("button", { class: "primary", onclick: () => go() }, "Remove background");
   const quality = seg([
     { value: "fast", label: "Fast", title: "Small model (4.6 MB download)" },
     { value: "best", label: "Best quality", title: "Larger model (44 MB download, cached after first use)" },
-  ], model, (v) => { model = v; localStorage.setItem("pc-model", v); });
+  ], model, (v) => { model = v; localStorage.setItem("pc-model", v); }, "Model");
 
   const after = h("div", { style: "display:flex;flex-direction:column;gap:12px" });
   const body = [status, h("label", {}, "Model", quality), run, bar, after];
@@ -175,7 +175,7 @@ export function cutoutTool(A) {
     if (!size) size = Math.max(4, Math.round(minSide(A.doc) / 25));
     const blurBtn = h("button", { class: "swatch", "data-v": "blur", title: "Blurred original", "aria-label": "Blurred original", style: "background:linear-gradient(135deg,#9ab,#cba);filter:blur(.5px)" });
     const sw = swatches({
-      value: meta.bg, transparent: true, extra: [blurBtn],
+      value: meta.bg, transparent: true, extra: [blurBtn], label: "Background",
       onChange: (v) => {
         const m = { ...A.doc.meta, bg: v };
         A.doc.commit(composeCutout(m), m);
@@ -184,7 +184,7 @@ export function cutoutTool(A) {
     blurBtn.onclick = () => { sw.set("blur"); const m = { ...A.doc.meta, bg: "blur" }; A.doc.commit(composeCutout(m), m); };
     const modes = seg([
       { value: "off", label: "Off" }, { value: "erase", label: "Erase" }, { value: "restore", label: "Restore" },
-    ], brushMode || "off", (v) => { brushMode = v === "off" ? null : v; A.setCursor(brushMode ? "brush" : "pan"); A.redraw(); });
+    ], brushMode || "off", (v) => { brushMode = v === "off" ? null : v; A.setCursor(brushMode ? "brush" : "pan"); A.redraw(); }, "Touch up edges");
     after.append(
       h("div", { class: "sub" }, "Background"), sw,
       h("div", { class: "sub" }, "Touch up edges"),
@@ -314,12 +314,12 @@ export function cropTool(A) {
   }
 
   const body = [
-    h("label", {}, "Aspect ratio", seg(ASPECTS, aspect, (v) => { aspect = v; resetRect(); })),
+    h("label", {}, "Aspect ratio", seg(ASPECTS, aspect, (v) => { aspect = v; resetRect(); }, "Aspect ratio")),
     h("div", { class: "row" },
-      h("button", { title: "Rotate left", onclick: () => rotate90(-1) }, "↺ Left"),
-      h("button", { title: "Rotate right", onclick: () => rotate90(1) }, "↻ Right"),
-      h("button", { title: "Flip horizontally", onclick: () => flip(true) }, "↔ Flip"),
-      h("button", { title: "Flip vertically", onclick: () => flip(false) }, "↕ Flip")),
+      h("button", { title: "Rotate left", "aria-label": "Rotate left", onclick: () => rotate90(-1) }, "↺ Left"),
+      h("button", { title: "Rotate right", "aria-label": "Rotate right", onclick: () => rotate90(1) }, "↻ Right"),
+      h("button", { title: "Flip horizontally", "aria-label": "Flip horizontally", onclick: () => flip(true) }, "↔ Flip"),
+      h("button", { title: "Flip vertically", "aria-label": "Flip vertically", onclick: () => flip(false) }, "↕ Flip")),
     straighten,
     sizeOut,
     applyButtons(apply, () => { angle = 0; straighten.set(0); renderRotation(); aspect = "free"; body[0].querySelector(".seg").set("free"); resetRect(); }, "Crop"),
@@ -454,7 +454,7 @@ export function resizeTool(A) {
   const modeSeg = seg([{ value: "image", label: "Image size" }, { value: "canvas", label: "Canvas size" }], "image", (v) => {
     imagePart.hidden = v !== "image"; canvasPart.hidden = v !== "canvas";
     if (v === "canvas") canvasPart.show(); else A.setSource(null);
-  });
+  }, "Resize");
   canvasPart.hidden = true;
   imagePart.append(
       h("p", { class: "hint" }, "Scales the whole picture."),
@@ -486,7 +486,7 @@ function canvasSizeSection(A) {
   const wIn = h("input", { type: "number", min: 1, max: 16000, inputmode: "numeric" });
   const hIn = h("input", { type: "number", min: 1, max: 16000, inputmode: "numeric" });
   const meta = h("p", { class: "meta" });
-  const grid = h("div", { class: "anchor-grid", role: "group", "aria-label": "Anchor" });
+  const grid = h("div", { class: "anchor-grid", role: "radiogroup", "aria-label": "Anchor" });
   const offset = () => ({ x: Math.round(((w - A.doc.width) * ax) / 2), y: Math.round(((hgt - A.doc.height) * ay) / 2) });
   const build = (c, i, color) => {
     const out = makeCanvas(w, hgt), x = out.getContext("2d");
@@ -499,13 +499,14 @@ function canvasSizeSection(A) {
   const show = () => {
     wIn.value = w; hIn.value = hgt;
     meta.textContent = `${A.doc.width} × ${A.doc.height} → ${w} × ${hgt} px`;
-    for (const b of grid.children) b.classList.toggle("on", +b.dataset.x === ax && +b.dataset.y === ay);
+    for (const b of grid.children) markRadio(b, +b.dataset.x === ax && +b.dataset.y === ay);
     if (w === A.doc.width && hgt === A.doc.height) return A.setSource(null);
     const prev = build(A.composite(), 0, fillColor());
     A.setSource(prev, prev.width, prev.height);
   };
   for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) {
-    grid.append(h("button", { "data-x": x, "data-y": y, title: "Anchor", onclick: () => { ax = x; ay = y; show(); } }));
+    const where = y === 1 && x === 1 ? "center" : `${["top ", "", "bottom "][y]}${["left", "", "right"][x]}`.trim();
+    grid.append(h("button", { type: "button", role: "radio", "aria-label": `Anchor ${where}`, "data-x": x, "data-y": y, title: "Anchor", onclick: () => { ax = x; ay = y; show(); } }));
   }
   wIn.oninput = () => { w = Math.max(1, Math.min(16000, Math.round(+wIn.value || 1))); show(); };
   hIn.oninput = () => { hgt = Math.max(1, Math.min(16000, Math.round(+hIn.value || 1))); show(); };
@@ -516,7 +517,7 @@ function canvasSizeSection(A) {
     h("div", { class: "row" }, h("label", { class: "grow" }, "Width", wIn), h("label", { class: "grow" }, "Height", hIn)),
     h("div", { class: "row", style: "align-items:flex-start;gap:16px" },
       h("label", {}, "Anchor", grid),
-      h("label", { class: "grow" }, "New area", seg([{ value: "transparent", label: "Transparent" }, { value: "bg", label: "Second color" }, { value: "fg", label: "Main color" }], fill, (v) => { fill = v; show(); }))),
+      h("label", { class: "grow" }, "New area", seg([{ value: "transparent", label: "Transparent" }, { value: "bg", label: "Second color" }, { value: "fg", label: "Main color" }], fill, (v) => { fill = v; show(); }, "New area"))),
     h("div", { class: "seg" },
       h("button", { onclick: () => addPct(0.1) }, "+10%"), h("button", { onclick: () => addPct(0.25) }, "+25%"),
       h("button", { onclick: () => square(), title: "Pad to a square" }, "Square")),
@@ -607,10 +608,10 @@ export function looksTool(A) {
     grid.replaceChildren();
     for (const n of ops.LOOK_NAMES) {
       const c = canvasFromImageData(ops.look(t, n));
-      grid.append(h("button", { "data-v": n, class: n === current ? "on" : "", onclick: () => { current = n; mark(); render(); } }, c, label(n)));
+      grid.append(h("button", { "data-v": n, class: n === current ? "on" : "", "aria-pressed": String(n === current), onclick: () => { current = n; mark(); render(); } }, c, label(n)));
     }
   };
-  const mark = () => { for (const b of grid.children) b.classList.toggle("on", b.dataset.v === current); };
+  const mark = () => { for (const b of grid.children) markRadio(b, b.dataset.v === current); };
   const mixed = (img) => {
     const f = ops.look(img, current);
     if (amount === 100) return f;
@@ -683,7 +684,7 @@ export function redactTool(A, mode = "blur") {
     title: REDACT_MODES.find((m) => m.value === mode).label,
     body: [
       h("p", { class: "hint" }, `Drag over faces, names, number plates or anything private to ${box ? "cover it" : mode === "blur" ? "blur it" : "pixelate it"}.`),
-      box ? swatches({ value: redactColor, onChange: (v) => { redactColor = v; } })
+      box ? swatches({ value: redactColor, label: "Box color", onChange: (v) => { redactColor = v; } })
         : slider({ label: "Strength", min: 10, max: 100, value: redactStrength, onInput: (v) => { redactStrength = v; } }),
       box ? null : h("p", { class: "note" }, "For passwords, card numbers or IDs, use Solid box (right-click or long-press this tool). Blur and pixelation can sometimes be reversed."),
     ].filter(Boolean),
@@ -812,7 +813,7 @@ export function textTool(A) {
   }
 
   /* ---- panel ---- */
-  const area = h("textarea", { rows: 3, spellcheck: "true", placeholder: "Type here to add text" });
+  const area = h("textarea", { rows: 3, spellcheck: "true", placeholder: "Type here to add text", "aria-label": "Text" });
   area.addEventListener("input", () => {
     if (!cur) { if (area.value.trim()) addText({ x: A.doc.width / 2, y: A.doc.height / 2 }, 0, true, true); return; }
     edit((t) => { t.text = area.value; });
@@ -825,18 +826,19 @@ export function textTool(A) {
   const fontSeg = seg([
     { value: "sans", label: "Sans" }, { value: "serif", label: "Serif" }, { value: "impact", label: "Bold" },
     { value: "mono", label: "Mono" }, { value: "hand", label: "Casual" },
-  ], style.font, (v) => edit((t) => { t.font = v; }));
+  ], style.font, (v) => edit((t) => { t.font = v; }), "Font");
   const weightSeg = seg([
     { value: 300, label: "Light" }, { value: 400, label: "Regular" }, { value: 600, label: "Semibold" }, { value: 700, label: "Bold" }, { value: 900, label: "Black" },
-  ], style.weight, (v) => edit((t) => { t.weight = v; }));
+  ], style.weight, (v) => edit((t) => { t.weight = v; }), "Weight");
   const sizeRange = h("input", { type: "range", min: 8, max: maxSize, value: style.size, "aria-label": "Font size" });
-  const sizeIn = h("input", { type: "number", min: 4, max: 2000, step: 1, value: style.size, inputmode: "numeric", "aria-label": "Font size in pixels" });
-  const setSize = (v) => { v = clamp(Math.round(v), 4, 2000); sizeRange.value = v; edit((t) => { t.size = v; }); };
+  const sizeIn = h("input", { type: "number", min: 4, max: 2000, step: 1, value: style.size, inputmode: "numeric", "aria-label": "Font size" });
+  const sizeText = (v) => { sizeRange.setAttribute("aria-valuetext", `${v} px`); sizeIn.setAttribute("aria-valuetext", `${v} px`); };
+  const setSize = (v) => { v = clamp(Math.round(v), 4, 2000); sizeRange.value = v; sizeText(v); edit((t) => { t.size = v; }); };
   sizeRange.addEventListener("input", () => { sizeIn.value = sizeRange.value; setSize(+sizeRange.value); });
   sizeIn.addEventListener("input", () => { if (+sizeIn.value >= 4) setSize(+sizeIn.value); });
-  const alignSeg = seg([{ value: "left", label: "Left" }, { value: "center", label: "Center" }, { value: "right", label: "Right" }], style.align, (v) => edit((t) => { t.align = v; }));
-  const colorSw = swatches({ value: style.color, onChange: (v) => edit((t) => { t.color = v; }) });
-  const bgSw = swatches({ value: style.bg, transparent: true, onChange: (v) => edit((t) => { t.bg = v; }) });
+  const alignSeg = seg([{ value: "left", label: "Left" }, { value: "center", label: "Center" }, { value: "right", label: "Right" }], style.align, (v) => edit((t) => { t.align = v; }), "Align");
+  const colorSw = swatches({ value: style.color, label: "Text color", onChange: (v) => edit((t) => { t.color = v; }) });
+  const bgSw = swatches({ value: style.bg, transparent: true, label: "Text background", onChange: (v) => edit((t) => { t.bg = v; }) });
   bgSw.querySelector(".swatch.transparent").title = "No background";
   const italic = h("input", { type: "checkbox", checked: style.italic, onchange: (e) => edit((t) => { t.italic = e.target.checked; }) });
   const outline = h("input", { type: "checkbox", checked: style.outline, onchange: (e) => edit((t) => { t.outline = e.target.checked; }) });
@@ -848,6 +850,7 @@ export function textTool(A) {
     if (document.activeElement !== area || !cur) area.value = cur ? t.text : "";
     fontSeg.set(t.font); weightSeg.set(t.weight); alignSeg.set(t.align);
     sizeRange.value = t.size; if (document.activeElement !== sizeIn) sizeIn.value = t.size;
+    sizeText(t.size);
     colorSw.set(t.color); bgSw.set(t.bg);
     italic.checked = t.italic; outline.checked = t.outline;
     doneBtn.disabled = !cur;
@@ -875,7 +878,7 @@ export function textTool(A) {
     body: [
       area,
       h("div", { class: "field" }, "Font", fontSeg),
-      h("div", { class: "field" }, h("span", { class: "lab" }, "Font size", h("span", { class: "num" }, sizeIn, "px")), sizeRange),
+      h("div", { class: "field" }, h("span", { class: "lab" }, "Font size", h("span", { class: "num" }, sizeIn, h("span", { "aria-hidden": "true" }, "px"))), sizeRange),
       h("div", { class: "field" }, "Weight", weightSeg),
       h("div", { class: "field" }, "Align", alignSeg),
       h("div", { class: "field" }, "Text color", colorSw),
@@ -1017,7 +1020,7 @@ export function frameTool(A) {
   const radius = slider({ label: "Rounded corners", min: 0, max: 100, value: 0, format: (x) => `${x}%`, onInput: (x) => { v.radius = x; render(); } });
   const circle = h("input", { type: "checkbox", onchange: (e) => { v.circle = e.target.checked; radius.input.disabled = v.circle; render(); } });
   const border = slider({ label: "Border", min: 0, max: 30, value: 0, format: (x) => `${x}%`, onInput: (x) => { v.pad = x; render(); } });
-  const colors = swatches({ value: v.color, transparent: true, onChange: (c) => { v.color = c; render(); } });
+  const colors = swatches({ value: v.color, transparent: true, label: "Border color", onChange: (c) => { v.color = c; render(); } });
   const reset = () => {
     Object.assign(v, { radius: 0, circle: false, pad: 0, color: "transparent" });
     radius.set(0); border.set(0); colors.set("transparent"); circle.checked = false; radius.input.disabled = false;
@@ -1062,7 +1065,7 @@ export function rotateFree(d, deg, expand, w = d.width, hgt = d.height) {
 export function rotateTool(A) {
   let scope = "image", angle = 0;
   const layerOnly = () => scope === "layer" && A.doc.hasLayers;
-  const scopeSeg = seg([{ value: "image", label: "Whole image" }, { value: "layer", label: "Current layer" }], scope, (v) => { scope = v; angleSlider.set(0); angle = 0; A.setSource(null); });
+  const scopeSeg = seg([{ value: "image", label: "Whole image" }, { value: "layer", label: "Current layer" }], scope, (v) => { scope = v; angleSlider.set(0); angle = 0; A.setSource(null); }, "Apply to");
   const scopeRow = h("label", {}, "Apply to", scopeSeg);
   const run = (fnImage, fnLayer) => {
     if (layerOnly()) { if (guard(A, "position")) A.doc.commit(fnLayer(A.doc.canvas), {}, { over: null }); }
@@ -1183,13 +1186,16 @@ export function layersPanel(A) {
     list.replaceChildren();
     for (let i = d.layers.length - 1; i >= 0; i--) {
       const l = d.layers[i];
-      const eye = h("button", { class: "icon-btn eye", title: l.visible ? "Hide layer" : "Show layer", "aria-label": l.visible ? "Hide layer" : "Show layer", html: l.visible ? EYE : EYE_OFF });
+      const eye = h("button", { class: "icon-btn eye", title: l.visible ? "Hide layer" : "Show layer", "aria-label": `${l.visible ? "Hide" : "Show"} layer: ${l.name}`, html: l.visible ? EYE : EYE_OFF });
       eye.onclick = (e) => { e.stopPropagation(); d.setLayerProps(i, { visible: !l.visible }); };
       const locked = l.lock && Object.values(l.lock).some(Boolean);
       const name = h("span", { class: "lname", title: "Double-click to rename" }, l.name);
       const sub = h("span", { class: "lsub" }, [l.meta?.text ? "Text" : "", l.opacity < 1 ? `${Math.round(l.opacity * 100)}%` : "", l.blend !== "source-over" ? BLEND_MODES.find((b) => b[0] === l.blend)[1] : ""].filter(Boolean).join(" · "));
       const li = h("li", {
         class: `${i === d.active ? "active" : ""} ${l.visible ? "" : "hidden-layer"}`, tabindex: 0,
+        // Named for assistive tech; the current layer is marked with aria-current.
+        "aria-label": [`Layer: ${l.name}`, sub.textContent, l.visible ? "" : "hidden", locked ? "locked" : ""].filter(Boolean).join(", "),
+        "aria-current": i === d.active ? "true" : null,
         onclick: () => { if (d.active !== i) { d.active = i; d.emit(); } },
         // Double-click a text layer to edit its text; double-click a name to rename.
         ondblclick: (e) => (l.meta?.text && !e.target.closest(".lname") ? A.editText?.(i) : rename(i)),
