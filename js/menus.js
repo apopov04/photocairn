@@ -24,10 +24,13 @@ export function buildMenus(bar, toggleBtn, spec) {
     if (it === "-") return h("li", { class: "msep", role: "separator" });
     const enabled = it.enabled ? it.enabled() : true;
     // The shortcut is shown in a <kbd>; assistive tech gets it as aria-keyshortcuts instead of in the name.
+    // Toggle items (it.checked) show a check mark and are menuitemcheckbox for assistive tech.
+    const checked = it.checked ? !!it.checked() : null;
     const btn = h("button", {
-      role: "menuitem", disabled: !enabled, "aria-label": it.label, "aria-keyshortcuts": it.shortcut ? keyShortcut(it.shortcut) : null,
+      role: checked === null ? "menuitem" : "menuitemcheckbox", "aria-checked": checked === null ? null : String(checked),
+      disabled: !enabled, "aria-label": it.label, "aria-keyshortcuts": it.shortcut ? keyShortcut(it.shortcut) : null,
       onclick: () => { done(); it.action(); },
-    }, h("span", {}, it.label), it.shortcut ? h("kbd", {}, it.shortcut) : null);
+    }, h("span", {}, checked === null ? null : h("span", { class: "mcheck", "aria-hidden": "true" }, checked ? "✓" : ""), it.label), it.shortcut ? h("kbd", {}, it.shortcut) : null);
     return h("li", { role: "none" }, btn);
   });
 

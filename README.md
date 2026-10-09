@@ -45,6 +45,7 @@ Related tools (brushes, selections, fills, shapes, blur out) share one toolbar b
 **Edit**
 - **Move** (V): drag a layer, or just the selected pixels. Arrow keys nudge.
 - **Select** (M): rectangle, ellipse, lasso, polygon and magic wand (W) share one toolbar button; pick one by right-clicking (or long-pressing) the button, or with M / Shift+M. New, add, subtract and intersect modes. Also select all, invert, crop to selection, copy or cut to a new layer, fill, and delete. Painting, fills, adjustments and filters stay inside the selection.
+- **Snap** (View › Snap, Ctrl+Shift+;): Move and Free transform snap to the canvas edges and centre and to other layers, with guide lines. Hold Ctrl to move freely.
 - **Free transform** (Ctrl+Alt+T): scale, rotate, flip and move a layer or selection, using handles or exact numbers.
 - **Crop**: free or preset ratios, plus straighten.
 - **Rotate & flip**: 90° steps, horizontal/vertical flip or any angle, applied to the whole image or one layer.

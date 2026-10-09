@@ -206,6 +206,7 @@ dialog input[type=number] { width: 100%; padding: 8px 10px; border: 1px solid va
 .menu-pop { position: fixed; z-index: 60; list-style: none; margin: 0; padding: 5px; min-width: 230px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
 .menu-pop button, .menu-sheet button { width: 100%; justify-content: space-between; border: 0; background: transparent; padding: 7px 10px; border-radius: 6px; font-size: 13px; text-align: left; }
 .menu-pop button:hover:not(:disabled), .menu-pop button:focus-visible, .menu-sheet button:hover:not(:disabled) { background: var(--accent); color: var(--accent-ink); outline: none; }
+.mcheck { display: inline-block; width: 1.1em; margin-left: -.15em; }
 .menu-pop kbd, .menu-sheet kbd { border: 0; background: none; color: inherit; opacity: .6; font-size: 12px; padding: 0; }
 .msep { height: 1px; background: var(--line); margin: 4px 6px; }
 .menu-sheet { position: fixed; z-index: 60; left: 8px; right: 8px; top: 52px; max-height: calc(100dvh - 70px); overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); padding: 6px 10px 10px; }

@@ -131,6 +131,7 @@ The editor looks like a small Photoshop: a menu bar (File, Edit, Image, Layer, S
 
 - **Move** (V): drag the active layer, or only the selected pixels. Arrow keys nudge by 1 px (Shift: 10 px). *Center on canvas*. No API.
 - **Select** (M, Shift+M cycles): Rectangle, Ellipse, Lasso, Polygon (click corners; click the first point, double-click or Enter to finish) and Magic wand (W; tolerance 0 to 100, default 12; contiguous; sample all layers). Mode: new, add, subtract, intersect (or hold Shift to add, Alt to subtract). Buttons: All, None, Invert, Crop, Copy → layer, Cut → layer, Fill, Delete. Brushes, fills, adjustments and filters then only change the selected area. API: `select()`, `selectColor()`, `selectAll()`, `deselect()`, `invertSelection()`, `cropToSelection()`, `fillSelection()`, `deleteSelection()`.
+- **Snap** (View › Snap, Ctrl+Shift+;, on by default): Move and Free transform snap the content's edges and centre to the canvas edges and centre lines and to the edges and centres of other visible layers, with magenta guide lines. Hold Ctrl (Cmd on Mac) while dragging to move freely.
 - **Free transform** (Ctrl+Alt+T): scale, rotate, flip and move a layer or selection with handles, or type width %, height % and angle. No API.
 
 **Image**
@@ -179,6 +180,7 @@ The editor looks like a small Photoshop: a menu bar (File, Edit, Image, Layer, S
 | Shapes / Text | U / T |
 | Next shape (Line, Arrow, Rectangle, Ellipse) | U again / Shift+U |
 | Free transform | Ctrl+Alt+T |
+| Snap on / off | Ctrl+Shift+; |
 | Swap / reset colors | X / D |
 | Brush or text size | [ / ] |
 | Select all / Deselect / Invert selection | Ctrl+A / Ctrl+D / Ctrl+Shift+I |

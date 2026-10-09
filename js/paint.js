@@ -9,6 +9,8 @@
 import * as ops from "./ops.js";
 import { makeCanvas, copyCanvas, getImageData, layerExtent, layerFromExtent } from "./editor.js";
 import { h, slider, seg, swatches } from "./ui.js";
+import { targetsFrom, snapBox, snapPoint, drawGuides } from "./snap.js";
+import { textBox } from "./text.js";
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const minSide = (d) => Math.min(d.width, d.height);
@@ -839,6 +841,32 @@ function movedMeta(A, dx, dy) {
   return t && !A.doc.selection ? { text: { ...t, x: t.x + dx, y: t.y + dy } } : {};
 }
 
+/* ---------------------------------- snapping --------------------------------- */
+
+// Visible-content box of a layer, cached per (immutable) canvas.
+const contentBoxes = new WeakMap();
+function contentBox(layer) {
+  if (layer.meta?.text) return textBox(layer.meta.text);
+  if (!contentBoxes.has(layer.canvas)) {
+    // Ignore nearly transparent fringes (soft cut-out edges, shadows).
+    const b = ops.alphaBounds(getImageData(layer.canvas), 24);
+    contentBoxes.set(layer.canvas, b && { x: b.x, y: b.y, w: b.w, h: b.h });
+  }
+  return contentBoxes.get(layer.canvas);
+}
+
+/** Snap lines from the canvas and every other visible layer (null when snapping is off). */
+function snapTargets(A) {
+  if (!A.snap) return null;
+  const d = A.doc, boxes = [{ x: 0, y: 0, w: d.width, h: d.height }];
+  d.layers.forEach((l, i) => { if (i !== d.active && l.visible) { const b = contentBox(l); if (b) boxes.push(b); } });
+  return targetsFrom(boxes);
+}
+
+// About 6 screen pixels, whatever the zoom. Holding Ctrl/Cmd turns snapping off for that move.
+const snapTol = (A) => 6 / A.view.zoom;
+const snapOff = (e) => e?.ctrlKey || e?.metaKey;
+
 export function moveTool(A) {
   let drag = null;
   const nudge = (dx, dy) => {
@@ -855,18 +883,31 @@ export function moveTool(A) {
     ],
     cursorStyle: "move",
     wantsPointer: true,
-    down(p) { if (!guard(A, "position")) return; drag = { start: p, lifted: liftSelection(A), dx: 0, dy: 0 }; },
+    down(p) {
+      if (!guard(A, "position")) return;
+      const lifted = liftSelection(A), targets = snapTargets(A);
+      const b = targets && ops.alphaBounds(getImageData(lifted.piece), 24);
+      // The moved content's box in document coordinates.
+      const box = b && { x: b.x - lifted.ext.x, y: b.y - lifted.ext.y, w: b.w, h: b.h };
+      drag = { start: p, lifted, dx: 0, dy: 0, targets, box, guides: null };
+    },
     move(p, e) {
       if (!drag) return;
       let dx = Math.round(p.x - drag.start.x), dy = Math.round(p.y - drag.start.y);
-      if (e?.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0; }
+      let axes = "xy";
+      if (e?.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) { dy = 0; axes = "x"; } else { dx = 0; axes = "y"; } }
+      drag.guides = null;
+      if (drag.targets && drag.box && !snapOff(e)) {
+        const b = drag.box, r = snapBox({ x: b.x + dx, y: b.y + dy, w: b.w, h: b.h }, drag.targets, snapTol(A), axes);
+        dx = Math.round(dx + r.dx); dy = Math.round(dy + r.dy); drag.guides = r.guides;
+      }
       drag.dx = dx; drag.dy = dy;
       A.setSource(visiblePart(A, moved(drag.lifted, dx, dy)));
     },
     up() {
       if (!drag) return;
       const { lifted, dx, dy } = drag; drag = null;
-      A.setSource(null);
+      A.setSource(null); A.redraw();
       if (dx || dy) { commitExtent(A, moved(lifted, dx, dy), movedMeta(A, dx, dy)); shiftSelection(A, dx, dy); }
     },
     keydown(e) {
@@ -876,6 +917,7 @@ export function moveTool(A) {
       nudge(k[0] * s, k[1] * s);
       return true;
     },
+    overlay(ctx, view) { if (drag) drawGuides(ctx, view, drag.guides); },
     cleanup() { A.setSource(null); },
   };
 }
@@ -962,6 +1004,13 @@ export function transformTool(A) {
   // Geometry helpers in box-local coordinates.
   const toLocal = (p) => { const dx = p.x - st.cx, dy = p.y - st.cy, c = Math.cos(-st.angle), s = Math.sin(-st.angle); return { x: dx * c - dy * s, y: dx * s + dy * c }; };
   const toWorld = (q) => { const c = Math.cos(st.angle), s = Math.sin(st.angle); return { x: st.cx + q.x * c - q.y * s, y: st.cy + q.x * s + q.y * c }; };
+  // Axis-aligned bounding box of the (possibly rotated) transform box.
+  const worldBox = () => {
+    const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => toWorld({ x: (sx * st.w) / 2, y: (sy * st.h) / 2 }));
+    const xs = pts.map((q) => q.x), ys = pts.map((q) => q.y);
+    const x = Math.min(...xs), y = Math.min(...ys);
+    return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
+  };
   const HANDLES = [[-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0]];
 
   function hit(p) {
@@ -994,12 +1043,19 @@ export function transformTool(A) {
     down(p) {
       if (!st) return;
       const t = hit(p);
-      drag = { ...t, start: p, s0: { ...st }, a0: Math.atan2(p.y - st.cy, p.x - st.cx) };
+      drag = { ...t, start: p, s0: { ...st }, a0: Math.atan2(p.y - st.cy, p.x - st.cx), targets: snapTargets(A), guides: null };
     },
     move(p, e) {
       if (!drag || !st) return;
-      const s0 = drag.s0;
-      if (drag.type === "move") { st.cx = s0.cx + p.x - drag.start.x; st.cy = s0.cy + p.y - drag.start.y; }
+      const s0 = drag.s0, snapping = drag.targets && !snapOff(e);
+      drag.guides = null;
+      if (drag.type === "move") {
+        st.cx = s0.cx + p.x - drag.start.x; st.cy = s0.cy + p.y - drag.start.y;
+        if (snapping) { // snap the (rotated) box's bounding box
+          const b = worldBox(), r = snapBox(b, drag.targets, snapTol(A));
+          st.cx += r.dx; st.cy += r.dy; drag.guides = r.guides;
+        }
+      }
       else if (drag.type === "rotate") {
         let a = s0.angle + Math.atan2(p.y - s0.cy, p.x - s0.cx) - drag.a0;
         if (e?.shiftKey) a = Math.round(a / (Math.PI / 12)) * (Math.PI / 12);
@@ -1007,6 +1063,11 @@ export function transformTool(A) {
       } else {
         // Scale against the opposite handle, in the box's rotated frame.
         st.cx = s0.cx; st.cy = s0.cy;
+        // Snap the dragged handle when the box isn't rotated.
+        if (snapping && Math.abs(Math.sin(s0.angle)) < 1e-6) {
+          const r = snapPoint(p, drag.targets, snapTol(A), (drag.sx ? "x" : "") + (drag.sy ? "y" : ""));
+          p = { x: r.x, y: r.y }; drag.guides = r.guides;
+        }
         const q = toLocal(p);
         const { sx, sy } = drag;
         const ox = -sx * s0.w / 2, oy = -sy * s0.h / 2;
@@ -1022,13 +1083,14 @@ export function transformTool(A) {
       }
       sync();
     },
-    up() { drag = null; },
+    up() { drag = null; A.redraw(); },
     keydown(e) {
       if (e.key === "Enter") { apply(); return true; }
       if (e.key === "Escape" && st) { cancel(); return true; }
     },
     overlay(ctx, view) {
       if (!st) return;
+      if (drag) drawGuides(ctx, view, drag.guides);
       const pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => view.toScreen(...Object.values(toWorld({ x: (sx * st.w) / 2, y: (sy * st.h) / 2 }))));
       ctx.strokeStyle = "#0F5468"; ctx.lineWidth = 1.5;
       ctx.beginPath(); pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.closePath(); ctx.stroke();

@@ -1,0 +1,23 @@
+eval:localStorage.removeItem("pc-snap") || "reset"
+eval:photocairn.addText({ text: "Snap me", x: 100, y: 120, size: 48 }).then((r) => JSON.stringify(r.box))
+tool:move
+dragimg:[150, 140, 53, 140]
+eval:"move, left edge 3px from canvas edge -> " + Math.round(__photocairn.doc.layer.meta.text.x)
+dragimg:[50, 140, 50, 140 + (240 - (__photocairn.doc.layer.meta.text.y + 24)) + 3]
+eval:"move, centre 3px off canvas centre -> y=" + Math.round(__photocairn.doc.layer.meta.text.y)
+key:Control+Shift+Semicolon
+eval:"snap now " + (localStorage.getItem("pc-snap") === "0" ? "off" : "on")
+dragimg:[50, 140, 53, 140]
+eval:"snap off, moved 3px -> x=" + Math.round(__photocairn.doc.layer.meta.text.x)
+key:Control+Shift+Semicolon
+dragimg:[60, 140, 57, 140]
+eval:"snap on again -> x=" + Math.round(__photocairn.doc.layer.meta.text.x)
+eval:(() => { const L = __photocairn.doc.layers; const c = L[1].canvas.getContext("2d").getImageData(0,0,L[1].canvas.width,L[1].canvas.height).data; let minx = 1e9; for (let i = 3; i < c.length; i += 4) if (c[i] > 24) minx = Math.min(minx, ((i - 3) / 4) % L[1].canvas.width); return "text pixels start at x=" + minx; })()
+eval:(() => { const cv = __photocairn.doc.layer.canvas, c = cv.getContext("2d").getImageData(0,0,cv.width,cv.height).data; let a = 1e9, b = -1, top = 1e9, bot = -1; for (let i = 3; i < c.length; i += 4) if (c[i] > 24) { const p = (i - 3) / 4, x = p % cv.width, y = (p / cv.width) | 0; a = Math.min(a, x); b = Math.max(b, x); top = Math.min(top, y); bot = Math.max(bot, y); } window.__box = { a, b: b + 1, cy: (top + bot) / 2 }; return "text box " + a + ".." + (b + 1); })()
+tool:transform
+wait:300
+dragimg:[__box.a + 40, __box.cy, __box.a + 40 + (640 - 3 - __box.b), __box.cy]
+wait:100
+shot:SN1-transform
+clicktext:Apply
+eval:(() => { const cv = __photocairn.doc.layer.canvas; const c = cv.getContext("2d").getImageData(0,0,cv.width,cv.height).data; let maxx = -1; for (let i = 3; i < c.length; i += 4) if (c[i] > 24) maxx = Math.max(maxx, ((i - 3) / 4) % cv.width); return "transform: right edge dropped 3px short of 640 -> " + (maxx + 1); })()

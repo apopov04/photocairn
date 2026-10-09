@@ -36,6 +36,8 @@ function display() {
 /* ----------------------------- context for tools ----------------------------- */
 
 const A = {
+  // Snap to the canvas and other layers when moving/transforming (View › Snap).
+  snap: localStorage.getItem("pc-snap") !== "0",
   get doc() { return doc; },
   view,
   toast,
@@ -70,6 +72,12 @@ const A = {
     view.dirty = true;
   },
 };
+
+function toggleSnap() {
+  A.snap = !A.snap;
+  localStorage.setItem("pc-snap", A.snap ? "1" : "0");
+  toast(A.snap ? "Snap on: aligns to the canvas and other layers (hold Ctrl to move freely)" : "Snap off");
+}
 
 /* ------------------------- colors & selection outline ------------------------ */
 
@@ -744,6 +752,7 @@ addEventListener("keydown", (e) => {
   if (mod && k === "j") { e.preventDefault(); P.selectionToLayer(A, false, makeLayer); return; }
   // Ctrl+T is reserved by browsers (new tab), so Free transform is Ctrl+Alt+T (as in Photopea).
   // e.code, because on a Mac Option changes e.key.
+  if (mod && e.shiftKey && e.code === "Semicolon") { e.preventDefault(); toggleSnap(); return; }
   if (mod && e.altKey && e.code === "KeyT") { e.preventDefault(); selectTool("transform", false); return; }
   if ((e.key === "Delete" || e.key === "Backspace") && !mod) { e.preventDefault(); P.clearSelection(A); return; }
   if (!mod && !e.altKey) {
@@ -922,7 +931,7 @@ function shortcutsDialog() {
     ["Move / Select / Crop", "V / M / C"], ["Next selection tool (Ellipse, Lasso…)", "M again / Shift+M"], ["Magic wand", "W"], ["Brush tools / Pencil / Eraser", "B / N / E"], ["Next brush tool (Pen, Highlighter…)", "B again / Shift+B"],
     ["Fill tools / Paint bucket", "G / K"], ["Next fill tool (Bucket, Gradient)", "G again / Shift+G"], ["Eyedropper", "I"],
     ["Shapes / Text", "U / T"], ["Next shape (Line, Arrow, Rectangle, Ellipse)", "U again / Shift+U"],
-    ["Other tools in a toolbar group", "Right-click or long-press it"], ["Free transform", "Ctrl+Alt+T"], ["Swap / reset colors", "X / D"], ["Brush size", "[ / ]"],
+    ["Other tools in a toolbar group", "Right-click or long-press it"], ["Free transform", "Ctrl+Alt+T"], ["Snap on / off (hold Ctrl to move freely)", "Ctrl+Shift+;"], ["Swap / reset colors", "X / D"], ["Brush size", "[ / ]"],
     ["Select all / Deselect / Invert", "Ctrl+A / Ctrl+D / Ctrl+Shift+I"], ["Copy / Cut / Paste", "Ctrl+C / Ctrl+X / Ctrl+V"],
     ["Selection to new layer", "Ctrl+J"], ["New layer / Merge down", "Ctrl+Shift+N / Ctrl+E"], ["Delete selected pixels", "Delete"],
     ["Undo / Redo", "Ctrl+Z / Ctrl+Shift+Z"], ["Open / Save", "Ctrl+O / Ctrl+S"], ["Zoom / Fit / 100%", "+ − / 0 / 1"],
@@ -1017,6 +1026,8 @@ buildMenus($("#menus"), $("#btn-menu"), [
     { label: "Zoom out", shortcut: "−", action: () => view.zoomAt(0.8, view.cssW / 2, view.cssH / 2), enabled: has },
     { label: "Fit on screen", shortcut: "0", action: () => view.fit(), enabled: has },
     { label: "Actual size (100%)", shortcut: "1", action: () => view.actualSize(), enabled: has },
+    "-",
+    { label: "Snap", shortcut: "Ctrl+Shift+;", checked: () => A.snap, action: toggleSnap },
     "-",
     { label: "Layers panel", shortcut: "L", action: () => showTab("layers"), enabled: has },
     { label: "History panel", action: () => showTab("history"), enabled: has },
