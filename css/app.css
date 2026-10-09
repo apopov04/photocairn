@@ -156,7 +156,7 @@ dialog input[type=number] { width: 100%; padding: 8px 10px; border: 1px solid va
 .drop h1 em { font-style: normal; color: var(--accent); }
 .drop p { color: var(--muted); margin: 0 auto 20px; max-width: 440px; }
 .drop p strong { color: var(--text); font-weight: 600; }
-.drop .hint { margin: 14px 0 0; font-size: 13px; }
+.drop .hint { margin: 14px auto 0; font-size: 13px; }
 .foot { color: var(--muted); font-size: 12px; margin: 0; }
 .show-touch { display: none; }
 @media (hover: none) { .show-touch { display: inline; } .hide-touch { display: none; } }
