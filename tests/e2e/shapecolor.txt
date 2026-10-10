@@ -1,0 +1,16 @@
+tool:shape-rect
+dragimg:[100, 100, 300, 250]
+fg:#00aa00
+eval:"shapes tool: " + __photocairn.doc.layer.meta.shape?.color
+tool:move
+fg:#0000ff
+eval:"move tool: " + __photocairn.doc.layer.meta.shape?.color
+tool:select
+fg:#ff00ff
+eval:"select tool: " + __photocairn.doc.layer.meta.shape?.color
+tool:brush
+fg:#123456
+eval:"brush tool (should NOT recolor): " + __photocairn.doc.layer.meta.shape?.color
+eval:[...document.querySelectorAll(".history .hlabel")].map((e) => e.textContent).slice(-3).join(", ")
+tool:move
+eval:"selected shape shows in the well: " + document.querySelector("#fg-input").value

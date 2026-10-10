@@ -315,6 +315,16 @@ export function renderShape(d, s) {
 
 const SHAPE_NAMES = { line: "Line", arrow: "Arrow", rect: "Rectangle", ellipse: "Ellipse" };
 
+/** Restyle the active shape layer (one undo step). Returns false if it isn't a shape layer. */
+export function restyleShape(A, patch) {
+  const s = A.doc.layer?.meta?.shape;
+  if (!s || !guard(A)) return false;
+  const n = { ...s, ...patch }, k = Object.keys(patch)[0];
+  A.doc.label({ color: "Shape color", size: "Shape width", opacity: "Shape opacity", fill: "Shape fill" }[k] || "Edit shape");
+  A.doc.commit(renderShape(A.doc, n), { shape: n });
+  return true;
+}
+
 /**
  * Shapes. Each shape goes on its own layer and stays editable (like text):
  * with the Shapes tool, drag its handles to resize, drag inside to move, and
@@ -333,12 +343,7 @@ export function shapesTool(A, variant = "shape-rect") {
   const shapeOf = (l) => l?.meta?.shape || null;
   const cur = () => shapeOf(A.doc.layer);
   // Panel changes restyle the selected shape layer (one undo step each).
-  const restyle = (patch) => {
-    const s = cur(); if (!s || !guard(A)) return;
-    const n = { ...s, ...patch }, k = Object.keys(patch)[0];
-    A.doc.label({ color: "Shape color", size: "Shape width", opacity: "Shape opacity", fill: "Shape fill" }[k] || "Edit shape");
-    A.doc.commit(renderShape(A.doc, n), { shape: n });
-  };
+  const restyle = (patch) => restyleShape(A, patch);
   const fillBox = h("input", { type: "checkbox", checked: o.fill, onchange: (e) => { o.fill = e.target.checked; save(); if (cur() && /rect|ellipse/.test(cur().kind)) restyle({ fill: o.fill }); } });
   const sizeS = slider({ label: "Line width", min: 1, max: Math.max(40, Math.round(minSide(A.doc) / 12)), value: o.size, format: (v) => `${v} px`, onInput: (v) => { o.size = v; save(); }, onChange: (v) => restyle({ size: v }) });
   const opS = slider({ label: "Opacity", min: 1, max: 100, value: o.opacity, format: (v) => `${v}%`, onInput: (v) => { o.opacity = v; save(); }, onChange: (v) => restyle({ opacity: v }) });

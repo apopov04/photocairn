@@ -65,6 +65,9 @@ const A = {
     localStorage.setItem(`pc-${which}`, hex);
     renderColorWell();
     tool?.onColorChange?.();
+    // A shape layer is recolored from the main color when the current tool
+    // doesn't paint with it (Move, Select, Transform…), like Photoshop shape layers.
+    if (which === "fg" && !COLOR_PAINTING.has(toolName) && toolName !== "shapes" && doc?.layer?.meta?.shape && doc.layer.meta.shape.color !== hex) P.restyleShape(A, { color: hex });
   },
   selectionChanged() {
     updateAnts();
@@ -223,7 +226,13 @@ function setDoc(d) {
   document.title = `${doc.name} · Photocairn`;
 }
 
+// With a non-painting tool, the main color shows the selected shape layer's color.
+function syncShapeColor() {
+  const sh = doc?.layer?.meta?.shape;
+  if (sh && !COLOR_PAINTING.has(toolName) && sh.color && A.colors.fg !== sh.color) { A.colors.fg = sh.color; localStorage.setItem("pc-fg", sh.color); renderColorWell(); }
+}
 function onDocChange() {
+  syncShapeColor();
   if (doc.rasterized) {
     const k = doc.rasterized === "shape" ? "Shape" : "Text";
     doc.rasterized = false; toast(`${k} rasterized: it's now pixels and can no longer be edited as ${k === "Shape" ? "a shape" : "text"}.`);
@@ -334,6 +343,8 @@ const FACTORIES = {
 
 // Rail tools stay selected (like Photoshop); "panel" tools opened from the
 // menus (Adjust, Resize...) return to the previous rail tool when closed.
+// Tools that paint with the main color (picking a color there doesn't recolor a shape layer).
+const COLOR_PAINTING = new Set(["paint", "brush", "pencil", "pen", "highlighter", "eraser", "fills", "fill", "gradient", "text", "healing", "heal", "clone", "eyedropper"]);
 const RAIL_TOOLS = new Set(["move", "select", "crop", "cutout", "paint", "eraser", "healing", "fills", "eyedropper", "shapes", "text", "redact"]);
 let railTool = "move";
 
@@ -366,6 +377,7 @@ function selectTool(name, toggle = false) {
   );
   updateLayerNote();
   markTool();
+  syncShapeColor();
   describeStage();
   showTab("props");
   view.dirty = true;
