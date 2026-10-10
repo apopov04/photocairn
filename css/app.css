@@ -214,7 +214,7 @@ dialog input[type=number] { width: 100%; padding: 8px 10px; border: 1px solid va
 .menu-sheet ul { list-style: none; margin: 0; padding: 0; }
 
 /* Left tool column: icons only, names in tooltips */
-.tools { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; grid-template-columns: none; }
+.tools { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 4px; grid-template-columns: none; overflow-x: hidden; }
 .tools button { width: 40px; height: 38px; padding: 0; border-radius: 8px; }
 .tools button span { display: none; }
 .tools button svg { width: 20px; height: 20px; }
