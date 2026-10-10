@@ -1207,3 +1207,154 @@ export function transformTool(A) {
     cleanup() { A.setSource(null); A.setCursorStyle(""); },
   };
 }
+
+/* ------------------------- spot healing & clone stamp ------------------------ */
+
+/** Variants of the healing tool group. */
+export const HEALS = [
+  { value: "heal", label: "Spot healing", short: "Healing", key: "J" },
+  { value: "clone", label: "Clone stamp", short: "Clone" },
+];
+
+/**
+ * Spot healing brush: paint over a blemish, dust spot, scratch or stray hair;
+ * on release it's filled with texture from around it (ops.inpaint). For small
+ * areas. Works on the active layer, respects the selection and alpha lock.
+ */
+export function healTool(A) {
+  const saved = JSON.parse(localStorage.getItem("pc-heal") || "null") || {};
+  const o = { size: saved.size || Math.max(8, Math.round(minSide(A.doc) / 40)) };
+  const save = () => localStorage.setItem("pc-heal", JSON.stringify(o));
+  const maxSize = Math.max(100, Math.round(minSide(A.doc) / 6));
+  const sizeS = slider({ label: "Size", min: 2, max: maxSize, value: o.size, format: (v) => `${v} px`, onInput: (v) => { o.size = v; save(); A.redraw(); } });
+  let g = null, hover = null;
+  const preview = () => {
+    const out = copyCanvas(g.base), x = out.getContext("2d");
+    const tint = copyCanvas(g.stroke.canvas), tx = tint.getContext("2d");
+    tx.globalCompositeOperation = "source-in"; tx.fillStyle = "rgba(255,45,85,.55)"; tx.fillRect(0, 0, tint.width, tint.height);
+    x.drawImage(tint, 0, 0);
+    return out;
+  };
+  const throttled = frameThrottle(() => g && A.setSource(preview()));
+  return {
+    title: "Spot healing",
+    body: [
+      sizeS,
+      h("p", { class: "hint" }, "Paint over a spot, scratch or stray hair, a little bigger than it. When you let go it's filled in from its surroundings. For small areas. [ and ] change the size."),
+    ],
+    cursor: "brush",
+    wantsPointer: true,
+    hover(p) { hover = p; A.redraw(); },
+    down(p) {
+      if (!guard(A)) return;
+      g = { base: A.doc.canvas, stroke: new Stroke(A.doc.width, A.doc.height, { size: o.size, hardness: 0.85, color: "#000" }) };
+      g.stroke.to(p); throttled();
+    },
+    move(p) { hover = p; if (!g) return A.redraw(); g.stroke.to(p); throttled(); },
+    up() {
+      if (!g) return;
+      const { base, stroke } = g; g = null;
+      const b = ops.alphaBounds(getImageData(stroke.canvas));
+      if (!b) { A.setSource(null); return; }
+      // Work on a box around the stroke with room for texture around it.
+      const d = A.doc, m = Math.max(o.size * 2, 24);
+      const x0 = Math.max(0, b.x - m), y0 = Math.max(0, b.y - m), x1 = Math.min(d.width, b.x + b.w + m), y1 = Math.min(d.height, b.y + b.h + m);
+      const w = x1 - x0, hh = y1 - y0;
+      const img = base.getContext("2d", { willReadFrequently: true }).getImageData(x0, y0, w, hh);
+      const mk = stroke.canvas.getContext("2d", { willReadFrequently: true }).getImageData(x0, y0, w, hh).data;
+      const hole = new Uint8Array(w * hh);
+      for (let i = 0; i < hole.length; i++) hole[i] = mk[i * 4 + 3] > 8 ? 1 : 0;
+      ops.inpaint(img.data, w, hh, hole);
+      // The filled patch, blended in through the soft edge of the stroke.
+      const patch = makeCanvas(d.width, d.height), px = patch.getContext("2d");
+      px.putImageData(img, x0, y0);
+      px.globalCompositeOperation = "destination-in"; px.drawImage(stroke.canvas, 0, 0);
+      const out = applyPaint(A, base, patch);
+      A.setSource(null);
+      A.doc.commit(out, {});
+    },
+    keydown(e) {
+      if (e.key !== "[" && e.key !== "]") return;
+      o.size = clamp(o.size + (e.key === "]" ? 1 : -1) * Math.max(1, Math.round(o.size * 0.15)), 2, maxSize);
+      sizeS.set(o.size); save(); A.redraw(); return true;
+    },
+    overlay(ctx, view) { brushCursor(ctx, view, hover, o.size / 2); },
+    cleanup() { A.setSource(null); },
+  };
+}
+
+/**
+ * Clone stamp: Alt+click (or "Pick source", on touch) sets where to copy
+ * from, then paint to copy those pixels. Aligned: the source follows the
+ * brush at a fixed offset across strokes; otherwise every stroke starts again
+ * at the source point. Copies from the active layer.
+ */
+let cloneSource = null; // kept while the app is open, like Photoshop
+export function cloneTool(A) {
+  const saved = JSON.parse(localStorage.getItem("pc-clone") || "null") || {};
+  const o = { size: saved.size || Math.max(8, Math.round(minSide(A.doc) / 40)), hardness: saved.hardness ?? 50, opacity: saved.opacity ?? 100, aligned: saved.aligned ?? true };
+  const save = () => localStorage.setItem("pc-clone", JSON.stringify(o));
+  const maxSize = Math.max(200, Math.round(minSide(A.doc) / 3));
+  let g = null, hover = null, picking = false, offset = null;
+  const sizeS = slider({ label: "Size", min: 1, max: maxSize, value: o.size, format: (v) => `${v} px`, onInput: (v) => { o.size = v; save(); A.redraw(); } });
+  const pickBtn = h("button", { class: "grow", onclick: () => { picking = !picking; pickBtn.classList.toggle("on", picking); A.toast(picking ? "Tap the spot to copy from." : "Source picking cancelled."); } }, "Pick source");
+  const status = h("p", { class: "hint" });
+  const showStatus = () => { status.textContent = cloneSource ? `Copying from ${Math.round(cloneSource.x)}, ${Math.round(cloneSource.y)}. Alt+click to choose another spot.` : "Alt+click the spot you want to copy from (or use Pick source), then paint."; };
+  showStatus();
+  const compose = () => {
+    const d = A.doc, src = makeCanvas(d.width, d.height), x = src.getContext("2d");
+    x.drawImage(g.base, -g.off.x, -g.off.y); // pixel p shows the source at p + off
+    x.globalCompositeOperation = "destination-in"; x.drawImage(g.stroke.canvas, 0, 0);
+    return applyPaint(A, g.base, src, { opacity: o.opacity / 100 });
+  };
+  const throttled = frameThrottle(() => g && A.setSource(compose()));
+  const setSource = (p) => { cloneSource = { x: p.x, y: p.y }; offset = null; picking = false; pickBtn.classList.remove("on"); showStatus(); A.redraw(); A.toast("Clone source set. Now paint where it should go."); };
+  return {
+    title: "Clone stamp",
+    body: [
+      sizeS,
+      slider({ label: "Hardness", min: 0, max: 100, value: o.hardness, format: (v) => `${v}%`, onInput: (v) => { o.hardness = v; save(); } }),
+      slider({ label: "Opacity", min: 1, max: 100, value: o.opacity, format: (v) => `${v}%`, onInput: (v) => { o.opacity = v; save(); } }),
+      h("label", { class: "checkbox" }, h("input", { type: "checkbox", checked: o.aligned, onchange: (e) => { o.aligned = e.target.checked; offset = null; save(); } }), "Aligned (the source moves with the brush)"),
+      h("div", { class: "row" }, pickBtn),
+      status,
+    ],
+    cursor: "brush",
+    wantsPointer: true,
+    hover(p) { hover = p; A.redraw(); },
+    down(p, e) {
+      if (e?.altKey || picking) return setSource(p);
+      if (!cloneSource) return A.toast("Alt+click the spot to copy from first (or use Pick source).");
+      if (!guard(A)) return;
+      if (!o.aligned || !offset) offset = { x: cloneSource.x - p.x, y: cloneSource.y - p.y };
+      g = { base: A.doc.canvas, off: { x: Math.round(offset.x), y: Math.round(offset.y) }, stroke: new Stroke(A.doc.width, A.doc.height, { size: o.size, hardness: o.hardness / 100, color: "#000" }) };
+      g.stroke.to(p); throttled();
+    },
+    move(p) { hover = p; if (!g) return A.redraw(); g.stroke.to(p); throttled(); },
+    up() {
+      if (!g) return;
+      throttled.flush?.();
+      const out = compose(); g = null; A.setSource(null);
+      A.doc.commit(out, {});
+    },
+    keydown(e) {
+      if (e.key !== "[" && e.key !== "]") return;
+      o.size = clamp(o.size + (e.key === "]" ? 1 : -1) * Math.max(1, Math.round(o.size * 0.15)), 1, maxSize);
+      sizeS.set(o.size); save(); A.redraw(); return true;
+    },
+    overlay(ctx, view) {
+      brushCursor(ctx, view, hover, o.size / 2);
+      // Where the copy comes from: a crosshair at the source (following the brush when aligned).
+      const s = !cloneSource ? null : g ? { x: hover.x + g.off.x, y: hover.y + g.off.y } : offset && o.aligned && hover ? { x: hover.x + offset.x, y: hover.y + offset.y } : cloneSource;
+      if (!s) return;
+      const q = view.toScreen(s.x, s.y), r = Math.max(6, (o.size / 2) * view.zoom);
+      ctx.save(); ctx.lineWidth = 1.5;
+      for (const [c, w] of [["rgba(0,0,0,.6)", 3], ["#fff", 1.5]]) {
+        ctx.strokeStyle = c; ctx.lineWidth = w;
+        ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2); ctx.moveTo(q.x - 6, q.y); ctx.lineTo(q.x + 6, q.y); ctx.moveTo(q.x, q.y - 6); ctx.lineTo(q.x, q.y + 6); ctx.stroke();
+      }
+      ctx.restore();
+    },
+    cleanup() { A.setSource(null); },
+  };
+}

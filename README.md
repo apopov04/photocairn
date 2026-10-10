@@ -62,6 +62,7 @@ Related tools (brushes, selections, fills, shapes, blur out) share one toolbar b
   - **Paint bucket** (K): tolerance, contiguous or global fill, and sample one layer or all layers.
   - **Gradient**: linear or radial, fading to the second color or to transparent.
 - **Eyedropper** (I): average 1, 3×3 or 5×5 pixels.
+- **Spot healing** and **Clone stamp** (J): remove small blemishes, dust and scratches, or copy one area over another.
 - **Shapes** (U, Shift+U cycles): **Line**, **Arrow**, **Rectangle** and **Ellipse** (outlined or filled). Shapes stay editable on their own layer: drag the handles to resize, drag to move, change color and width afterwards.
 - **Text** (T): click to place text or drag to draw a text box, then drag to move it and drag the side handles to set the wrapping width. Font, font size, weight, italic, alignment, color, outline and background color. Each text is an editable text layer: click it with the Text tool (or double-click it) to change it later. Painting or filtering a text layer turns it into pixels.
 - Main and second colors in the toolbar. X swaps them, D resets to black and white. Alt+click with the brush picks a color.

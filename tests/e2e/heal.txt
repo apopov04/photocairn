@@ -1,0 +1,23 @@
+fg:#ff0000
+tool:brush
+range:0:12
+dragimg:[300, 200, 301, 200]
+eval:(() => { const d = __photocairn.doc.layer.canvas.getContext("2d").getImageData(296, 196, 9, 9).data; let r = 0; for (let i = 0; i < d.length; i += 4) if (d[i] > 200 && d[i + 1] < 60 && d[i + 2] < 60) r++; return "red pixels in the blemish before: " + r; })()
+tool:heal
+eval:document.querySelector("#panel h2").textContent + " | rail: " + document.querySelector('#tools button[data-tool="heal"] span')?.textContent
+range:0:24
+dragimg:[300, 200, 302, 201]
+wait:300
+eval:(() => { const d = __photocairn.doc.layer.canvas.getContext("2d").getImageData(296, 196, 9, 9).data; let r = 0; for (let i = 0; i < d.length; i += 4) if (d[i] > 200 && d[i + 1] < 60 && d[i + 2] < 60) r++; return "red pixels after healing: " + r + " | history: " + [...document.querySelectorAll(".history .hlabel")].map((e) => e.textContent).slice(-2).join(", "); })()
+shot:HE1-healed
+tool:clone
+eval:"clone panel: " + document.querySelector("#panel h2").textContent
+dragimg:[100, 100, 140, 100]
+eval:"painting without a source: " + document.querySelector(".toast")?.textContent
+eval:(() => { window.__src = __photocairn.doc.layer.canvas.getContext("2d").getImageData(100, 300, 1, 1).data.join(","); return "source pixel " + window.__src; })()
+tap:0.5:0.5:Alt
+eval:"after Alt+click: " + document.querySelector(".toast")?.textContent
+eval:(() => { const r = document.querySelector("#stage-wrap").getBoundingClientRect(), p = __photocairn.view.toImage(r.width / 2, r.height / 2); window.__S = { x: Math.round(p.x), y: Math.round(p.y) }; window.__Spx = [...__photocairn.doc.layer.canvas.getContext("2d").getImageData(window.__S.x, window.__S.y, 1, 1).data].join(","); return "source " + JSON.stringify(window.__S) + " = " + window.__Spx; })()
+dragimg:[100, 420, 101, 420]
+eval:(() => { const px = [...__photocairn.doc.layer.canvas.getContext("2d").getImageData(100, 420, 1, 1).data]; const s = window.__Spx.split(",").map(Number); const diff = Math.max(...px.map((v, i) => Math.abs(v - s[i]))); return "cloned pixel " + px.join(",") + " vs source " + window.__Spx + " -> max diff " + diff; })()
+shot:HE2-cloned

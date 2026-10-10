@@ -421,3 +421,82 @@ export function maskOutline(data, w, h, stride = 1, offset = 0) {
   }
   return loops;
 }
+
+/**
+ * Spot healing: fill the `hole` pixels (1 = fill) of RGBA `data` (w × h) with
+ * texture from the surrounding known pixels. Patch-based, like Photoshop's
+ * spot healing: holes are filled from the edge inwards ("onion peel"); each
+ * pixel takes the centre of the best-matching known patch, trying the offsets
+ * its already-filled neighbours used (keeps texture coherent) plus random
+ * samples. A second pass refines with the whole neighbourhood filled in.
+ * Meant for small areas (blemishes, dust, scratches). Mutates and returns data.
+ */
+export function inpaint(data, w, h, hole, { radius = 3, samples = 40, seed = 1 } = {}) {
+  const N = w * h, known = new Uint8Array(N), off = new Int32Array(N * 2);
+  let rnd = seed >>> 0 || 1;
+  const rand = (n) => { rnd ^= rnd << 13; rnd ^= rnd >>> 17; rnd ^= rnd << 5; return (rnd >>> 0) % n; };
+  const src = []; // original known pixels whose whole patch lies inside the image
+  for (let i = 0; i < N; i++) {
+    known[i] = hole[i] ? 0 : 1;
+    const x = i % w, y = (i / w) | 0;
+    if (known[i] && x >= radius && y >= radius && x < w - radius && y < h - radius) src.push(i);
+  }
+  if (!src.length) return data;
+  const orig = Uint8Array.from(known); // sources must be original pixels
+  // Patch distance between target t and source s over pixels known at t.
+  const dist = (t, s, best) => {
+    const tx = t % w, ty = (t / w) | 0, sx = s % w, sy = (s / w) | 0;
+    let d = 0, n = 0;
+    for (let dy = -radius; dy <= radius; dy++) {
+      const y = ty + dy; if (y < 0 || y >= h) continue;
+      for (let dx = -radius; dx <= radius; dx++) {
+        const x = tx + dx; if (x < 0 || x >= w) continue;
+        const q = y * w + x; if (!known[q]) continue;
+        const p = ((sy + dy) * w + sx + dx) * 4, o = q * 4;
+        const a = data[o] - data[p], b = data[o + 1] - data[p + 1], c = data[o + 2] - data[p + 2], e = data[o + 3] - data[p + 3];
+        d += a * a + b * b + c * c + e * e; n++;
+        if (d > best * n) return Infinity; // can't win; stop early
+      }
+    }
+    return n ? d / n : Infinity;
+  };
+  const okSrc = (s, t) => { const x = s % w, y = (s / w) | 0; return s !== t && orig[s] && x >= radius && y >= radius && x < w - radius && y < h - radius; };
+  const fillPixel = (t) => {
+    const tx = t % w, ty = (t / w) | 0;
+    let best = Infinity, bs = -1;
+    const tryS = (s) => { if (!okSrc(s, t)) return; const d = dist(t, s, best); if (d < best) { best = d; bs = s; } };
+    // Offsets used by already-filled neighbours (coherence).
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const x = tx + dx, y = ty + dy; if ((!dx && !dy) || x < 0 || y < 0 || x >= w || y >= h) continue;
+      const q = y * w + x; if (known[q] && !orig[q]) { const sx = tx + off[q * 2], sy = ty + off[q * 2 + 1]; if (sx >= 0 && sy >= 0 && sx < w && sy < h) tryS(sy * w + sx); }
+    }
+    if (bs >= 0) { tryS(bs); } // keep current (refine pass)
+    for (let k = 0; k < samples; k++) tryS(src[rand(src.length)]);
+    if (bs < 0) return;
+    const o = t * 4, p = bs * 4;
+    data[o] = data[p]; data[o + 1] = data[p + 1]; data[o + 2] = data[p + 2]; data[o + 3] = data[p + 3];
+    off[t * 2] = (bs % w) - tx; off[t * 2 + 1] = ((bs / w) | 0) - ty;
+    known[t] = 1;
+  };
+  // Onion peel: hole pixels in order of distance from the known area.
+  const order = [];
+  let front = [];
+  const seen = Uint8Array.from(known);
+  for (let i = 0; i < N; i++) if (!known[i]) {
+    const x = i % w, y = (i / w) | 0;
+    if ((x > 0 && known[i - 1]) || (x < w - 1 && known[i + 1]) || (y > 0 && known[i - w]) || (y < h - 1 && known[i + w])) { front.push(i); seen[i] = 1; }
+  }
+  while (front.length) {
+    order.push(...front);
+    const next = [];
+    for (const i of front) {
+      const x = i % w, y = (i / w) | 0;
+      for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1]) if (j >= 0 && !seen[j]) { seen[j] = 1; next.push(j); }
+    }
+    front = next;
+  }
+  for (const t of order) fillPixel(t);
+  // Refine once, now that every neighbourhood is complete.
+  for (let k = order.length - 1; k >= 0; k--) { const t = order[k]; known[t] = 0; fillPixel(t); known[t] = 1; }
+  return data;
+}

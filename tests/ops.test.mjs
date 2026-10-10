@@ -187,3 +187,22 @@ test("circleSpans: aliased round pencil tip", () => {
     assert.ok(Math.abs(area / (Math.PI * d * d / 4) - 1) < (d < 10 ? 0.25 : 0.05), `area ~ pi r^2 for ${d}`);
   }
 });
+
+test("inpaint fills a hole in a flat area with that color exactly", () => {
+  const w = 24, h = 24, d = new Uint8ClampedArray(w * h * 4), hole = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) d.set([40, 120, 200, 255], i * 4);
+  for (let y = 9; y < 15; y++) for (let x = 9; x < 15; x++) { hole[y * w + x] = 1; d.set([255, 0, 0, 255], (y * w + x) * 4); }
+  ops.inpaint(d, w, h, hole);
+  for (let i = 0; i < w * h; i++) if (hole[i]) assert.deepEqual([...d.slice(i * 4, i * 4 + 4)], [40, 120, 200, 255]);
+});
+
+test("inpaint continues a stripe texture across the hole", () => {
+  const w = 40, h = 40, d = new Uint8ClampedArray(w * h * 4), hole = new Uint8Array(w * h);
+  const col = (x) => (Math.floor(x / 3) % 2 ? 230 : 30); // 3px vertical stripes
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) d.set([col(x), col(x), col(x), 255], (y * w + x) * 4);
+  for (let y = 14; y < 26; y++) for (let x = 14; x < 26; x++) { hole[y * w + x] = 1; d.set([128, 128, 128, 255], (y * w + x) * 4); }
+  ops.inpaint(d, w, h, hole);
+  let wrong = 0, n = 0;
+  for (let y = 14; y < 26; y++) for (let x = 14; x < 26; x++) { n++; if (Math.abs(d[(y * w + x) * 4] - col(x)) > 40) wrong++; }
+  assert.ok(wrong / n < 0.1, `${wrong}/${n} pixels off the stripe pattern`);
+});
