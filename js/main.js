@@ -327,14 +327,14 @@ const FACTORIES = {
   layers: T.layersTool, rotate: T.rotateTool,
   move: P.moveTool, select: (a, v) => P.selectTool(a, makeLayer, v), transform: P.transformTool,
   paint: P.paintTool, eraser: (a) => P.paintTool(a, "eraser"),
-  heal: (a, v) => (v === "clone" ? P.cloneTool(a) : P.healTool(a)),
+  healing: (a, v) => (v === "clone" ? P.cloneTool(a) : P.healTool(a)),
   shapes: P.shapesTool, fills: (a, v) => (v === "gradient" ? P.gradientTool(a) : P.fillTool(a)), eyedropper: P.eyedropperTool,
   export: exportTool,
 };
 
 // Rail tools stay selected (like Photoshop); "panel" tools opened from the
 // menus (Adjust, Resize...) return to the previous rail tool when closed.
-const RAIL_TOOLS = new Set(["move", "select", "crop", "cutout", "paint", "eraser", "heal", "fills", "eyedropper", "shapes", "text", "redact"]);
+const RAIL_TOOLS = new Set(["move", "select", "crop", "cutout", "paint", "eraser", "healing", "fills", "eyedropper", "shapes", "text", "redact"]);
 let railTool = "move";
 
 function selectTool(name, toggle = false) {
@@ -380,7 +380,7 @@ function describeStage() {
 }
 
 // Tools that edit only the selected layer (others act on the whole image).
-const LAYER_TOOLS = new Set(["cutout", "adjust", "looks", "redact", "move", "transform", "paint", "eraser", "heal", "shapes", "fills"]);
+const LAYER_TOOLS = new Set(["cutout", "adjust", "looks", "redact", "move", "transform", "paint", "eraser", "healing", "shapes", "fills"]);
 let layerNote = null;
 function updateLayerNote() {
   if (!layerNote || !doc) return;
@@ -415,6 +415,8 @@ $("#tools").addEventListener("click", (e) => {
 const GROUPS = [];
 // `group` names the rail button for assistive tech: "Brush tool group: Pencil".
 function toolGroup({ tool, name, group, variants, icons, storage, key = "", tip = "", initial }) {
+  // The group's own name means "its current variant", so it must not also be a variant's name.
+  if (variants.some((v) => v.value === tool)) throw new Error(`Tool group "${tool}" can't share its name with one of its tools.`);
   const btn = $(`#tools button[data-tool="${tool}"]`);
   const keys = variants.map((v) => v.value);
   const saved = localStorage.getItem(storage);
@@ -535,7 +537,7 @@ toolGroup({
 
 // Healing group: spot healing and clone stamp.
 toolGroup({
-  tool: "heal", name: "Healing tools", group: "Healing", variants: P.HEALS, storage: "pc-heal-tool", key: "J",
+  tool: "healing", name: "Healing tools", group: "Healing", variants: P.HEALS, storage: "pc-heal-tool", key: "J",
   icons: { heal: ph("bandaids"), clone: ph("stamp") },
 });
 

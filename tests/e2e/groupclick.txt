@@ -1,0 +1,19 @@
+tool:clone
+eval:"before: " + document.querySelector("#panel h2").textContent
+click:#tools button[data-tool="healing"]
+eval:"after clicking the Healing button: " + document.querySelector("#panel h2").textContent
+tool:pencil
+click:#tools button[data-tool="paint"]
+eval:"brush group keeps: " + document.querySelector("#panel h2").textContent
+tool:gradient
+click:#tools button[data-tool="fills"]
+eval:"fill group keeps: " + document.querySelector("#panel h2").textContent
+tool:arrow
+click:#tools button[data-tool="shapes"]
+eval:"shapes group keeps: " + document.querySelector("#panel h2").textContent
+tool:lasso
+click:#tools button[data-tool="select"]
+eval:"select group keeps: " + document.querySelector("#panel h2").textContent
+tool:pixelate
+click:#tools button[data-tool="redact"]
+eval:"blur out group keeps: " + document.querySelector("#panel h2").textContent
