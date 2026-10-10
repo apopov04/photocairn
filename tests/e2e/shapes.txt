@@ -5,7 +5,7 @@ dragimg:[300, 250, 400, 320]
 eval:(() => { const s = __photocairn.doc.layer.meta.shape; return `after corner drag b=${Math.round(s.b.x)},${Math.round(s.b.y)} a=${Math.round(s.a.x)},${Math.round(s.a.y)}`; })()
 dragimg:[200, 101, 230, 131]
 eval:(() => { const s = __photocairn.doc.layer.meta.shape; return `after move a=${Math.round(s.a.x)},${Math.round(s.a.y)} b=${Math.round(s.b.x)},${Math.round(s.b.y)}`; })()
-click:#panel .swatch[data-v="#ff3b30"]
+fg:#ff3b30
 eval:"color=" + __photocairn.doc.layer.meta.shape.color
 type:#panel input[type=number]:12
 key:Enter

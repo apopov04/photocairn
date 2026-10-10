@@ -3,7 +3,7 @@ tool:brush
 range:0:30
 range:1:20
 range:2:60
-click:#panel .swatch[data-v="#ff3b30"]
+fg:#ff3b30
 drag:0.3:0.3:0.6:0.4
 shot:P1-brush
 eval:__photocairn.doc.undoStack.length
@@ -23,7 +23,7 @@ drag:0.62:0.7:0.62:0.7
 eval:document.querySelector("#fg-well").style.background
 tool:fill
 range:0:20
-click:#panel .swatch[data-v="#34c759"]
+fg:#34c759
 drag:0.1:0.1:0.1:0.1
 shot:P4-fill
 tool:gradient

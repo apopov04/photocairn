@@ -2,7 +2,7 @@
 //   node tests/serve.mjs &        (serves the app on :8080)
 //   CHROME=/path/to/chrome node tests/e2e/run.mjs tests/e2e/tools.txt
 // Each line of a scenario file is a step: tool:<name>, clicktext:<label>,
-// drag:x1:y1:x2:y2 (fractions of the canvas), tap:x:y, path:x1:y1:x2:y2:..., range:<index>:<value>,
+// drag:x1:y1:x2:y2 (fractions of the canvas), fg:#rrggbb, tap:x:y, path:x1:y1:x2:y2:..., range:<index>:<value>,
 // waitfor:<js expr>, eval:<js expr>, type:<css>:<text>, key:<combo>, shot:<name>, wait:<ms>,
 // addlayer:<image path>, openfile:<path>, select:<css>:<value>, menu:<Menu>:<Item>,
 // dragimg:<js expr giving [x1, y1, x2, y2] in image pixels> (e.g. to grab a handle).
@@ -92,6 +92,9 @@ for (const s of steps) { console.error("step", s);
     for (const [a, b] of pts.slice(1)) await page.mouse.move(a, b, { steps: 6 });
     await page.mouse.up();
     if (mod) await page.keyboard.up(mod);
+  }
+  else if (name === "fg") { // fg:#rrggbb sets the main color via the left toolbar's color well
+    await page.evaluate((v) => { const i = document.querySelector("#fg-input"); i.value = v; i.dispatchEvent(new Event("input", { bubbles: true })); }, args.join(":"));
   }
   else if (name === "addlayer") { await page.evaluate(async (b64) => { const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)); await window.__photocairn.addLayer(new Blob([bin], { type: "image/jpeg" }), "pug.jpg"); }, fs.readFileSync(args[0]).toString("base64")); }
   else if (name === "openfile") { await page.evaluate(async (b64, n) => { const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)); await window.__photocairn.open(new Blob([bin]), n); }, fs.readFileSync(args[0]).toString("base64"), args[0].split("/").pop()); }

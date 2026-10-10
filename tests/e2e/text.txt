@@ -40,7 +40,7 @@ dragimg:(()=>{const t=__photocairn.doc.layers[2].meta.text;return [t.x+20,t.y+t.
 wait:100
 eval:"re-opened: " + document.querySelector("#panel textarea").value + " active=" + __photocairn.doc.active
 eval:(()=>{const a=document.querySelector("#panel textarea");a.value="Edited after painting";a.dispatchEvent(new Event("input"));return a.value})()
-click:#panel .field:nth-child(7) .swatch[data-v="#ff3b30"]
+fg:#ff3b30
 wait:200
 eval:"edited: " + JSON.stringify([__photocairn.doc.layers[2].meta.text.text, __photocairn.doc.layers[2].meta.text.color, __photocairn.doc.layers[2].name])
 shot:x5-reedited
@@ -56,7 +56,7 @@ wait:200
 dragimg:(()=>{const t=__photocairn.doc.layers[2].meta.text;return [t.x+20,t.y+t.size*0.6,t.x+20,t.y+t.size*0.6]})()
 wait:100
 eval:"re-opened after undo: " + document.querySelector("#panel textarea").value + " bg=" + __photocairn.doc.layers[2].meta.text.bg
-click:#panel .field:nth-child(8) .swatch[data-v="#ffffff"]
+click:#panel .field:nth-child(7) .swatch[data-v="#ffffff"]
 wait:200
 eval:"bg now " + __photocairn.doc.layers[2].meta.text.bg + " redo=" + __photocairn.doc.canRedo
 shot:x6-after-undo-edit

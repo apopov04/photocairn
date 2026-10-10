@@ -2,18 +2,18 @@ shot:B0-rail
 tool:paint
 eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=paint]').title
 range:0:24
-click:#panel .swatch[data-v="#ff3b30"]
+fg:#ff3b30
 drag:0.2:0.3:0.8:0.3
 tool:pen
 eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=paint] span').textContent
-click:#panel .swatch[data-v="#0a84ff"]
+fg:#0a84ff
 path:0.2:0.45:0.3:0.5:0.4:0.42:0.5:0.52:0.6:0.44:0.7:0.5:0.8:0.45
 eval:document.querySelector('#tools [data-tool=paint]').dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 }))
 shot:B1-flyout
 eval:[...document.querySelectorAll(".tool-flyout button")].map((b) => b.textContent + (b.classList.contains("on") ? "*" : "")).join(", ")
 eval:[...document.querySelectorAll(".tool-flyout button")].find((b) => b.textContent.startsWith("Highlighter")).click()
 eval:!!document.querySelector(".tool-flyout") + " | " + document.querySelector("#side h2").textContent
-click:#panel .swatch[data-v="#ffcc00"]
+fg:#ffcc00
 drag:0.15:0.32:0.85:0.32
 drag:0.15:0.48:0.85:0.48
 path:0.3:0.6:0.5:0.6:0.5:0.75

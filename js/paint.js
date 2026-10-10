@@ -8,7 +8,7 @@
 
 import * as ops from "./ops.js";
 import { makeCanvas, copyCanvas, getImageData, layerExtent, layerFromExtent, makeLayer } from "./editor.js";
-import { h, slider, seg, swatches } from "./ui.js";
+import { h, slider, seg } from "./ui.js";
 import { targetsFrom, snapBox, snapPoint, drawGuides } from "./snap.js";
 import { textBox } from "./text.js";
 
@@ -75,12 +75,6 @@ export function withinSelection(A, base, edited) {
     x.globalCompositeOperation = "destination-in"; x.drawImage(base, 0, 0);
   }
   return out;
-}
-
-function colorRow(A, which = "fg") {
-  const sw = swatches({ value: A.colors[which], label: which === "fg" ? "Main color" : "Second color", onChange: (v) => A.setColor(which, v) });
-  sw.sync = () => sw.set(A.colors[which]);
-  return sw;
 }
 
 /** Brush outline: a circle of radius r, or a rectangle (half-width r, half-height ry). */
@@ -204,9 +198,12 @@ export function paintTool(A, kind = "brush") {
   const sizeS = slider({ label: "Size", min: 1, max: maxSize, value: o.size, format: (v) => `${v} px`, onInput: (v) => { o.size = v; save(); A.redraw(); } });
   const hardS = slider({ label: "Hardness", min: 0, max: 100, value: o.hardness, format: (v) => `${v}%`, onInput: (v) => { o.hardness = v; save(); } });
   const opS = slider({ label: "Opacity", min: 1, max: 100, value: o.opacity, format: (v) => `${v}%`, onInput: (v) => { o.opacity = v; save(); } });
-  const colors = kind === "eraser" ? null
-    : chisel ? Object.assign(swatches({ value: o.color, label: "Highlighter color", onChange: (v) => { o.color = v; save(); } }), { sync() {} })
-    : colorRow(A);
+  // Colors come from the left toolbar. The highlighter remembers its own color
+  // (yellow by default): it becomes the main color while the highlighter is in
+  // use, and the previous main color comes back when you switch tools.
+  const prevFg = chisel ? A.colors.fg : null;
+  let leaving = false; // restoring the previous color must not overwrite the highlighter's
+  if (chisel && A.colors.fg !== o.color) A.setColor("fg", o.color);
   const modeSeg = kind === "eraser" ? seg([{ value: "soft", label: "Brush" }, { value: "block", label: "Block" }], o.block ? "block" : "soft", (v) => { o.block = v === "block"; hardS.hidden = !hasHardness(); save(); }, "Eraser mode") : null;
   hardS.hidden = !hasHardness();
   const paintOpts = () => ({ opacity: o.opacity / 100, erase: kind === "eraser", blend: chisel ? "multiply" : "source-over" });
@@ -222,14 +219,13 @@ export function paintTool(A, kind = "brush") {
     body: [
       modeSeg,
       sizeS, hardS, opS,
-      colors,
       h("p", { class: "hint" }, kind === "eraser"
         ? "Shift+click erases a straight line. [ and ] change the size."
         : `${HINTS[kind]} Shift+click draws a straight line. Alt+click picks a color. [ and ] change the size.`),
     ].filter(Boolean),
     cursor: "brush",
     wantsPointer: true,
-    onColorChange() { colors?.sync(); },
+    onColorChange() { if (chisel && !leaving) { o.color = A.colors.fg; save(); } },
     hover(p) { hover = p; A.redraw(); },
     down(p, e) {
       if (e?.altKey && kind !== "eraser") { pickColor(A, p, e.shiftKey ? "bg" : "fg"); return; }
@@ -277,7 +273,7 @@ export function paintTool(A, kind = "brush") {
       const r = Math.max(0.5, o.size / 2);
       brushCursor(ctx, view, hover, chisel ? r * CHISEL : r, isPixel() === "square" || chisel, r);
     },
-    cleanup() { A.setSource(null); },
+    cleanup() { A.setSource(null); if (chisel && prevFg && prevFg !== A.colors.fg) { leaving = true; A.setColor("fg", prevFg); } },
   };
 }
 
@@ -334,7 +330,6 @@ export function shapesTool(A, variant = "shape-rect") {
   const o = { kind, size: saved.size || Math.max(2, Math.round(minSide(A.doc) / 160)), fill: !!saved.fill, opacity: saved.opacity ?? 100 };
   const save = () => localStorage.setItem("pc-shapes", JSON.stringify(o));
   let g = null, edit = null;
-  const colors = colorRow(A);
   const shapeOf = (l) => l?.meta?.shape || null;
   const cur = () => shapeOf(A.doc.layer);
   // Panel changes restyle the selected shape layer (one undo step each).
@@ -395,13 +390,13 @@ export function shapesTool(A, variant = "shape-rect") {
   return {
     title: sv.label,
     body: [
-      colors, sizeS, opS,
+      sizeS, opS,
       closed ? h("label", { class: "checkbox" }, fillBox, "Filled") : null,
       h("p", { class: "hint" }, `Drag to draw (Shift: ${closed ? `perfect ${kind === "rect" ? "square" : "circle"}` : "45° angles"}). Each shape gets its own layer and stays editable: drag its handles to resize, drag it to move, and change color or width here.`),
     ].filter(Boolean),
     cursor: "crosshair",
     wantsPointer: true,
-    onColorChange() { colors.sync(); if (cur() && !g && !edit) restyle({ color: A.colors.fg }); },
+    onColorChange() { if (cur() && !g && !edit) restyle({ color: A.colors.fg }); },
     onDocChange() { sync(); A.redraw(); },
     down(p) {
       const s = cur();
@@ -521,20 +516,17 @@ export function fillTool(A) {
   const saved = JSON.parse(localStorage.getItem("pc-fill") || "null") || {};
   const o = { tolerance: saved.tolerance ?? 32, contiguous: saved.contiguous ?? true, all: !!saved.all, opacity: saved.opacity ?? 100 };
   const save = () => localStorage.setItem("pc-fill", JSON.stringify(o));
-  const colors = colorRow(A);
   return {
     title: "Paint bucket",
     body: [
-      colors,
       slider({ label: "Tolerance", min: 0, max: 100, value: o.tolerance, onInput: (v) => { o.tolerance = v; save(); } }),
       slider({ label: "Opacity", min: 1, max: 100, value: o.opacity, format: (v) => `${v}%`, onInput: (v) => { o.opacity = v; save(); } }),
       h("label", { class: "checkbox" }, h("input", { type: "checkbox", checked: o.contiguous, onchange: (e) => { o.contiguous = e.target.checked; save(); } }), "Contiguous (only connected areas)"),
       h("label", { class: "checkbox" }, h("input", { type: "checkbox", checked: o.all, onchange: (e) => { o.all = e.target.checked; save(); } }), "Sample all layers"),
-      h("p", { class: "hint" }, "Click an area to fill it with the color. Higher tolerance fills more similar colors."),
+      h("p", { class: "hint" }, "Click an area to fill it with the main color (left toolbar). Higher tolerance fills more similar colors."),
     ],
     cursor: "crosshair",
     wantsPointer: true,
-    onColorChange() { colors.sync(); },
     down(p) {
       if (!guard(A)) return;
       const d = A.doc;

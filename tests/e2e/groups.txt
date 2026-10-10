@@ -3,7 +3,7 @@ shot:G0-rail
 tool:fills
 eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=fills] span').textContent + " | " + document.querySelector('#tools [data-tool=fills]').title + " | segs: " + document.querySelectorAll("#panel .seg").length
 range:0:20
-click:#panel .swatch[data-v="#34c759"]
+fg:#34c759
 tap:0.1:0.1
 key:g
 eval:document.querySelector("#side h2").textContent + " | " + document.querySelector('#tools [data-tool=fills] span').textContent + " | " + document.querySelector('#tools [data-tool=fills]').classList.contains("active") + " | " + localStorage.getItem("pc-fill-tool")
@@ -56,7 +56,7 @@ eval:[...document.querySelectorAll(".tool-flyout button")].map((b) => b.textCont
 shot:G5-redact-flyout
 eval:[...document.querySelectorAll(".tool-flyout button")].find((b) => b.textContent.startsWith("Solid box")).click()
 eval:document.querySelector("#side h2").textContent + " | swatches: " + !!document.querySelector("#panel .swatches") + " | sliders: " + document.querySelectorAll("#panel input[type=range]").length
-click:#panel .swatch[data-v="#ff3b30"]
+fg:#ff3b30
 drag:0.1:0.6:0.3:0.7
 shot:G6-redact
 tool:blur

@@ -763,7 +763,7 @@ export function textTool(A) {
   function addText(p, w = 0, center = false, typing = false) {
     done();
     const d = A.doc;
-    const t = { ...style, text: area.value.trim() ? area.value : "Your text", w, x: p.x, y: p.y };
+    const t = { ...style, color: A.colors.fg, text: area.value.trim() ? area.value : "Your text", w, x: p.x, y: p.y };
     if (!w) {
       const L = measureText(t);
       t.x = p.x - (center || t.align === "center" ? L.w / 2 : t.align === "right" ? L.w : 0);
@@ -838,7 +838,6 @@ export function textTool(A) {
   sizeRange.addEventListener("input", () => { sizeIn.value = sizeRange.value; setSize(+sizeRange.value); });
   sizeIn.addEventListener("input", () => { if (+sizeIn.value >= 4) setSize(+sizeIn.value); });
   const alignSeg = seg([{ value: "left", label: "Left" }, { value: "center", label: "Center" }, { value: "right", label: "Right" }], style.align, (v) => edit((t) => { t.align = v; }), "Align");
-  const colorSw = swatches({ value: style.color, label: "Text color", onChange: (v) => edit((t) => { t.color = v; }) });
   const bgSw = swatches({ value: style.bg, transparent: true, label: "Text background", onChange: (v) => edit((t) => { t.bg = v; }) });
   bgSw.querySelector(".swatch.transparent").title = "No background";
   const italic = h("input", { type: "checkbox", checked: style.italic, onchange: (e) => edit((t) => { t.italic = e.target.checked; }) });
@@ -846,13 +845,16 @@ export function textTool(A) {
   const hint = h("p", { class: "hint" });
   const doneBtn = h("button", { class: "grow", onclick: () => done() }, "Done");
 
+  let syncingColor = false;
   function syncUi() {
     const t = params();
     if (document.activeElement !== area || !cur) area.value = cur ? t.text : "";
     fontSeg.set(t.font); weightSeg.set(t.weight); alignSeg.set(t.align);
     sizeRange.value = t.size; if (document.activeElement !== sizeIn) sizeIn.value = t.size;
     sizeText(t.size);
-    colorSw.set(t.color); bgSw.set(t.bg);
+    bgSw.set(t.bg);
+    // The text color is the main color in the left toolbar: show the edited text's color there.
+    if (cur && t.color && t.color !== A.colors.fg) { syncingColor = true; A.setColor("fg", t.color); syncingColor = false; }
     italic.checked = t.italic; outline.checked = t.outline;
     doneBtn.disabled = !cur;
     hint.textContent = cur
@@ -882,7 +884,6 @@ export function textTool(A) {
       h("div", { class: "field" }, h("span", { class: "lab" }, "Font size", h("span", { class: "num" }, sizeIn, h("span", { "aria-hidden": "true" }, "px"))), sizeRange),
       h("div", { class: "field" }, "Weight", weightSeg),
       h("div", { class: "field" }, "Align", alignSeg),
-      h("div", { class: "field" }, "Text color", colorSw),
       h("div", { class: "field" }, "Background", bgSw),
       h("div", { class: "row" },
         h("label", { class: "checkbox" }, italic, "Italic"),
@@ -983,6 +984,8 @@ export function textTool(A) {
         ctx.beginPath(); ctx.rect(Math.round(x) - 4.5, Math.round(a.y + (L.h * view.zoom) / 2) - 6.5, 9, 13); ctx.fill(); ctx.stroke();
       }
     },
+    // Picking a main color in the left toolbar recolors the text being edited.
+    onColorChange() { if (!syncingColor && cur && params().color !== A.colors.fg) edit((t) => { t.color = A.colors.fg; }); },
     cleanup() { done(); A.setCursorStyle(""); },
   };
 }
