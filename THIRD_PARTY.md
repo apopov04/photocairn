@@ -20,3 +20,6 @@ Photocairn bundles the following so it can run fully offline, with no requests t
 ## Phosphor Icons (`js/icons.js`)
 - Regular weight, from https://phosphoricons.com (`@phosphor-icons/core` 2.1.1)
 - MIT License, © Phosphor Icons. Only the icons Photocairn uses are inlined, so nothing is loaded from other servers.
+
+## Font library (`vendor/fonts/library/`)
+- 50 free font families from the Google Fonts collection (https://github.com/google/fonts), all under the SIL Open Font License 1.1; each folder has its `LICENSE.txt`. Hosted on this site and loaded only when used: Arimo (stand-in for Arial, Helvetica), Tinos (stand-in for Times New Roman), Cousine (stand-in for Courier New), Carlito (stand-in for Calibri), Caladea (stand-in for Cambria), Gelasio (stand-in for Georgia), EB Garamond (stand-in for Garamond), Archivo Narrow (stand-in for Arial Narrow), Roboto, Open Sans, Source Sans 3, Lato, Inter, Noto Sans, Montserrat, Poppins, Nunito Sans, Work Sans, IBM Plex Sans, PT Sans, Fira Sans, Barlow, DM Sans, Manrope, Public Sans, Raleway, Mulish, Rubik, Merriweather, Lora, Libre Baskerville, Crimson Pro, PT Serif, Source Serif 4, Noto Serif, Playfair Display, Libre Caslon Text, Cormorant Garamond, Spectral, IBM Plex Serif, Source Code Pro, Roboto Mono, IBM Plex Mono, JetBrains Mono, Oswald, Bebas Neue, Dancing Script, Caveat, Great Vibes, Pacifico.

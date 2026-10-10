@@ -2,6 +2,7 @@
 // and returns { title, body, cursor?, down?, move?, up?, overlay?, cleanup?,
 // onDocChange? }. Pointer callbacks receive points in image coordinates.
 
+import { openFontPicker, closeFontPicker, ensureFont, cssFamily, fontName, allFonts } from "./fonts.js";
 import { ph } from "./icons.js";
 import * as ops from "./ops.js";
 import { makeCanvas, ctx2d, copyCanvas, getImageData, canvasFromImageData, resizeCanvas, makeLayer, BLEND_MODES } from "./editor.js";
@@ -824,13 +825,18 @@ export function textTool(A) {
   });
   const focusArea = (select = false) => { area.focus({ preventScroll: true }); if (select) area.select(); };
 
-  const fontSeg = seg([
-    { value: "sans", label: "Sans" }, { value: "serif", label: "Serif" }, { value: "impact", label: "Bold" },
-    { value: "mono", label: "Mono" }, { value: "hand", label: "Casual" },
-  ], style.font, (v) => edit((t) => { t.font = v; }), "Font");
+  // Font picker (shared with Filecairn): built-ins, the 50-font library, fonts on this computer, uploads.
+  // A font is loaded before it's applied, so the text renders in it straight away.
+  const withFont = async (font, weight, italic, fn) => { await ensureFont(font, weight >= 600, italic); edit(fn); fontSeg.set(params().font); };
+  const fontBtn = h("button", { class: "fontbtn", "data-font-picker": "", "aria-haspopup": "dialog", onclick: () => {
+    if (document.querySelector(".fpop")) return closeFontPicker();
+    openFontPicker({ host: document.body, anchor: fontBtn, current: params().font, toast: A.toast, onPick: (id) => { const t = params(); withFont(id, t.weight, t.italic, (x) => { x.font = id; }); } });
+  } });
+  const fontSeg = { set(v) { fontBtn.textContent = fontName(v); fontBtn.style.fontFamily = cssFamily(v).replace(/"/g, "'"); }, el: fontBtn };
+  allFonts().then(() => fontSeg.set(params().font));
   const weightSeg = seg([
     { value: 300, label: "Light" }, { value: 400, label: "Regular" }, { value: 600, label: "Semibold" }, { value: 700, label: "Bold" }, { value: 900, label: "Black" },
-  ], style.weight, (v) => edit((t) => { t.weight = v; }), "Weight");
+  ], style.weight, (v) => { const t = params(); withFont(t.font, v, t.italic, (x) => { x.weight = v; }); }, "Weight");
   const sizeRange = h("input", { type: "range", min: 8, max: maxSize, value: style.size, "aria-label": "Font size" });
   const sizeIn = h("input", { type: "number", min: 4, max: 2000, step: 1, value: style.size, inputmode: "numeric", "aria-label": "Font size" });
   const sizeText = (v) => { sizeRange.setAttribute("aria-valuetext", `${v} px`); sizeIn.setAttribute("aria-valuetext", `${v} px`); };
@@ -840,7 +846,7 @@ export function textTool(A) {
   const alignSeg = seg([{ value: "left", label: "Left" }, { value: "center", label: "Center" }, { value: "right", label: "Right" }], style.align, (v) => edit((t) => { t.align = v; }), "Align");
   const bgSw = swatches({ value: style.bg, transparent: true, label: "Text background", onChange: (v) => edit((t) => { t.bg = v; }) });
   bgSw.querySelector(".swatch.transparent").title = "No background";
-  const italic = h("input", { type: "checkbox", checked: style.italic, onchange: (e) => edit((t) => { t.italic = e.target.checked; }) });
+  const italic = h("input", { type: "checkbox", checked: style.italic, onchange: (e) => { const t = params(), v = e.target.checked; withFont(t.font, t.weight, v, (x) => { x.italic = v; }); } });
   const outline = h("input", { type: "checkbox", checked: style.outline, onchange: (e) => edit((t) => { t.outline = e.target.checked; }) });
   const hint = h("p", { class: "hint" });
   const doneBtn = h("button", { class: "grow", onclick: () => done() }, "Done");
@@ -880,7 +886,7 @@ export function textTool(A) {
     title: "Text",
     body: [
       area,
-      h("div", { class: "field" }, "Font", fontSeg),
+      h("div", { class: "field" }, "Font", fontSeg.el),
       h("div", { class: "field" }, h("span", { class: "lab" }, "Font size", h("span", { class: "num" }, sizeIn, h("span", { "aria-hidden": "true" }, "px"))), sizeRange),
       h("div", { class: "field" }, "Weight", weightSeg),
       h("div", { class: "field" }, "Align", alignSeg),

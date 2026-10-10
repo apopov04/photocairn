@@ -1,0 +1,17 @@
+tool:text
+clicktext:Add text
+click:#panel .fontbtn
+wait:200
+eval:"picker groups: " + [...document.querySelectorAll(".fpop .fgroup")].map((g) => g.textContent).join(" | ")
+type:.fpop .fsearch:Calibri
+eval:"search: " + [...document.querySelectorAll(".fpop .fitem")].map((b) => b.textContent).join(" | ")
+shot:FO1-picker
+click:.fpop .fitem
+wait:800
+eval:"font now " + __photocairn.doc.layer.meta.text?.font + ", loaded: " + document.fonts.check('700 40px "fc-carlito"') + ", button: " + document.querySelector("#panel .fontbtn").textContent
+click:#panel .fontbtn
+wait:200
+click:.fpop [data-font-id="serif"]
+wait:300
+eval:"back to built-in: " + __photocairn.doc.layer.meta.text?.font + " / " + document.querySelector("#panel .fontbtn").textContent
+shot:FO2-text

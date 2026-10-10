@@ -151,7 +151,7 @@ The editor looks like a small Photoshop: a menu bar (File, Edit, Image, Layer, S
 - **Spot healing** (J): paint over a small blemish, dust spot, scratch or stray hair; when you let go it is filled with texture from around it. For small areas.
 - **Clone stamp** (J again, or right-click the Healing button): Alt+click (or Pick source on touch) the spot to copy from, then paint to copy it. Aligned keeps the source moving with the brush.
 - **Shapes** (U, Shift+U cycles): Line, Arrow, Rectangle and Ellipse; line width, opacity, filled (rectangle and ellipse). Shift keeps 45° angles or a perfect square or circle. API: `drawShape()`. Each shape gets its own layer and stays editable: with the Shapes tool, drag its handles to resize, drag it to move, and change color, width, opacity or fill. Painting or filtering it turns it into pixels.
-- **Text** (T): click to add text or drag to draw a wrapping text box. Font (Sans, Serif, Bold, Mono, Casual), size, weight (Light to Black), alignment, text color, background color, italic and outline. Each text is an editable text layer: click it with the Text tool, or double-click it, to change it. Painting or filtering a text layer turns it into pixels. API: `addText()`, `editText()`.
+- **Text** (T): click to add text or drag to draw a wrapping text box. Font (Sans, Serif, Bold, Mono, Casual), size, weight (Light to Black), alignment, text color, background color, italic and outline. Each text is an editable text layer: click it with the Text tool, or double-click it, to change it. Painting or filtering a text layer turns it into pixels. API: `addText()`, `editText()`. Fonts: the built-in five, a library of 50 free fonts hosted on this site (including look-alikes for Arial, Times New Roman, Calibri, Cambria, Georgia, Garamond and Courier New), fonts installed on your computer (Chrome/Edge), or your own .ttf/.otf files. Fonts download only when used.
 - **Colors**: main and second color at the bottom of the toolbar. X swaps them, D resets to black and white.
 
 **Photo**
@@ -615,7 +615,7 @@ Add an editable text layer above the active layer.
 | `x` | number |  | Left edge of the text box. Default: centered. |
 | `y` | number |  | Top edge of the text box. Default: centered. |
 | `size` | number, 4..2000 | 1/10 of the shorter side | Font size in pixels. |
-| `font` | "sans" \| "serif" \| "impact" \| "mono" \| "hand" | `"sans"` | Font family (impact is shown as Bold in the app, hand as Casual). |
+| `font` | string | `"sans"` | Font: built in "sans", "serif", "impact" (Bold), "mono", "hand" (Casual), or a library id such as "carlito" (Calibri look-alike), "tinos" (Times New Roman), "arimo" (Arial), "eb-garamond", "roboto", "lato" (see vendor/fonts/library/fonts.json). |
 | `weight` | 300 \| 400 \| 600 \| 700 \| 900 | `700` | Font weight. |
 | `italic` | boolean | `false` | Italic. |
 | `color` | color | `"#000000"` | Text color. |
@@ -641,7 +641,7 @@ Change a text layer: any addText option (text, x, y, size, color...). Unchanged 
 | `x` | number |  | Left edge. |
 | `y` | number |  | Top edge. |
 | `size` | number, 4..2000 |  | Font size. |
-| `font` | "sans" \| "serif" \| "impact" \| "mono" \| "hand" |  | Font family. |
+| `font` | string |  | Font: a built-in or library font id (see addText). |
 | `weight` | 300 \| 400 \| 600 \| 700 \| 900 |  | Font weight. |
 | `italic` | boolean |  | Italic. |
 | `color` | color |  | Text color. |

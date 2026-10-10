@@ -4,6 +4,7 @@
 // layers. (x, y) is the top-left of the text box in document pixels; w is the
 // wrapping width, or 0 for a single unwrapped line per paragraph.
 
+import { configureFonts, cssFamily, ensureFont } from "./fonts.js";
 import { makeCanvas, layerFromExtent } from "./editor.js";
 
 export const FONTS = {
@@ -14,7 +15,15 @@ export const FONTS = {
   hand: '"Comic Sans MS", "Chalkboard SE", "Marker Felt", cursive',
 };
 
-export const fontCss = (t) => `${t.italic ? "italic " : ""}${t.weight} ${t.size}px ${FONTS[t.font] || FONTS.sans}`;
+// Built-in fonts plus the shared library / your own fonts (see fonts.js).
+configureFonts({
+  db: "photocairn-fonts",
+  basic: { sans: { name: "Sans", css: FONTS.sans }, serif: { name: "Serif", css: FONTS.serif }, impact: { name: "Bold (Impact)", css: FONTS.impact }, mono: { name: "Mono", css: FONTS.mono }, hand: { name: "Casual", css: FONTS.hand } },
+});
+export const fontCss = (t) => {
+  if (!FONTS[t.font]) ensureFont(t.font, t.weight >= 600, t.italic);
+  return `${t.italic ? "italic " : ""}${t.weight} ${t.size}px ${FONTS[t.font] || cssFamily(t.font)}`;
+};
 export const hasBg = (t) => !!t.bg && t.bg !== "transparent";
 
 /** Break text into lines no wider than `width` (0 = only at newlines). measure(str) gives px. */

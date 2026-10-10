@@ -350,3 +350,17 @@ button.link { border: 0; background: none; color: var(--accent); font-weight: 60
 .layer-props .op .num input.numf[type="number"] { flex: none; width: 44px; min-width: 0; padding: 2px 4px; }
 /* iOS zooms the page into inputs under 16px; keep the fields at 16px on touch screens. */
 @media (pointer: coarse) { .panel .num input.numf[type="number"] { font-size: 16px; width: 60px; padding: 2px 5px; } .layer-props .op .num input.numf[type="number"] { width: 50px; } }
+
+/* Font picker */
+.fontrow { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; }
+.fontbtn { justify-content: space-between; text-align: left; font-weight: 400; font-size: 15px; padding: 8px 10px; }
+.fontbtn::after { content: "▾"; color: var(--muted); font-family: system-ui, sans-serif; font-size: 12px; }
+.fpop { position: absolute; z-index: 60; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; }
+.fpop .fsearch { margin: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; background: var(--bg); }
+.fpop .flist { overflow-y: auto; padding: 0 6px 6px; flex: 1 1 auto; min-height: 0; }
+.fpop .fgroup { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 10px 8px 4px; font-family: var(--font); }
+.fpop .fitem { width: 100%; justify-content: space-between; border: 0; background: transparent; padding: 6px 8px; border-radius: 6px; font-size: 15px; text-align: left; }
+.fpop .fitem small { font-family: var(--font); font-size: 11px; color: var(--muted); }
+.fpop .fitem.on { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); color: var(--accent); font-weight: 600; }
+.fpop .factions { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px 10px; border-top: 1px solid var(--line); }
+.fpop .factions button { font-size: 12px; padding: 5px 9px; }

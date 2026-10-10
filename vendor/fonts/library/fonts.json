@@ -1,0 +1,634 @@
+[
+{
+"id": "arimo",
+"name": "Arimo",
+"category": "sans",
+"alias": "Arial, Helvetica",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "tinos",
+"name": "Tinos",
+"category": "serif",
+"alias": "Times New Roman",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "cousine",
+"name": "Cousine",
+"category": "mono",
+"alias": "Courier New",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "carlito",
+"name": "Carlito",
+"category": "sans",
+"alias": "Calibri",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "caladea",
+"name": "Caladea",
+"category": "serif",
+"alias": "Cambria",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "gelasio",
+"name": "Gelasio",
+"category": "serif",
+"alias": "Georgia",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "eb-garamond",
+"name": "EB Garamond",
+"category": "serif",
+"alias": "Garamond",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "archivo-narrow",
+"name": "Archivo Narrow",
+"category": "sans",
+"alias": "Arial Narrow",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "roboto",
+"name": "Roboto",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "open-sans",
+"name": "Open Sans",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "source-sans-3",
+"name": "Source Sans 3",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "lato",
+"name": "Lato",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "inter",
+"name": "Inter",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "noto-sans",
+"name": "Noto Sans",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "montserrat",
+"name": "Montserrat",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "poppins",
+"name": "Poppins",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "nunito-sans",
+"name": "Nunito Sans",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "work-sans",
+"name": "Work Sans",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "ibm-plex-sans",
+"name": "IBM Plex Sans",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "pt-sans",
+"name": "PT Sans",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "fira-sans",
+"name": "Fira Sans",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "barlow",
+"name": "Barlow",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "dm-sans",
+"name": "DM Sans",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "manrope",
+"name": "Manrope",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "public-sans",
+"name": "Public Sans",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "raleway",
+"name": "Raleway",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "mulish",
+"name": "Mulish",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "rubik",
+"name": "Rubik",
+"category": "sans",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "merriweather",
+"name": "Merriweather",
+"category": "serif",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "lora",
+"name": "Lora",
+"category": "serif",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "libre-baskerville",
+"name": "Libre Baskerville",
+"category": "serif",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "crimson-pro",
+"name": "Crimson Pro",
+"category": "serif",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "pt-serif",
+"name": "PT Serif",
+"category": "serif",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "source-serif-4",
+"name": "Source Serif 4",
+"category": "serif",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "noto-serif",
+"name": "Noto Serif",
+"category": "serif",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "playfair-display",
+"name": "Playfair Display",
+"category": "serif",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "libre-caslon-text",
+"name": "Libre Caslon Text",
+"category": "serif",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "cormorant-garamond",
+"name": "Cormorant Garamond",
+"category": "serif",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "spectral",
+"name": "Spectral",
+"category": "serif",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "ibm-plex-serif",
+"name": "IBM Plex Serif",
+"category": "serif",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "source-code-pro",
+"name": "Source Code Pro",
+"category": "mono",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "roboto-mono",
+"name": "Roboto Mono",
+"category": "mono",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "ibm-plex-mono",
+"name": "IBM Plex Mono",
+"category": "mono",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "jetbrains-mono",
+"name": "JetBrains Mono",
+"category": "mono",
+"alias": "",
+"styles": [
+"regular",
+"bold",
+"italic",
+"bolditalic"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "oswald",
+"name": "Oswald",
+"category": "display",
+"alias": "",
+"styles": [
+"regular",
+"bold"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "bebas-neue",
+"name": "Bebas Neue",
+"category": "display",
+"alias": "",
+"styles": [
+"regular"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "dancing-script",
+"name": "Dancing Script",
+"category": "script",
+"alias": "",
+"styles": [
+"regular",
+"bold"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "caveat",
+"name": "Caveat",
+"category": "script",
+"alias": "",
+"styles": [
+"regular",
+"bold"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "great-vibes",
+"name": "Great Vibes",
+"category": "script",
+"alias": "",
+"styles": [
+"regular"
+],
+"license": "OFL-1.1"
+},
+{
+"id": "pacifico",
+"name": "Pacifico",
+"category": "script",
+"alias": "",
+"styles": [
+"regular"
+],
+"license": "OFL-1.1"
+}
+]
